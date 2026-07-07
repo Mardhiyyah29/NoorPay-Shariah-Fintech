@@ -1,0 +1,165 @@
+/**
+ * AmaPay API Service
+ * All calls route through Django backend — API key never exposed
+ */
+
+const BASE = '/api';  // Vite proxy handles http://127.0.0.1:8000
+
+let _access  = null;
+let _refresh = null;
+
+export const setTokens  = (access, refresh) => { _access = access; _refresh = refresh; };
+export const clearTokens = () => { _access = null; _refresh = null; };
+export const isLoggedIn  = () => !!_access;
+
+export const formatNaira = (amount) =>
+  `₦${Number(amount).toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+const request = async (path, options = {}) => {
+  const headers = {
+    'Content-Type': 'application/json',
+    ...(_access ? { Authorization: `Bearer ${_access}` } : {}),
+    ...options.headers,
+  };
+  const res = await fetch(`${BASE}${path}`, { ...options, headers });
+
+  // Auto-refresh on 401
+  if (res.status === 401 && _refresh) {
+    try {
+      const r = await fetch(`${BASE}/token/refresh/`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refresh: _refresh }),
+      });
+      const d = await r.json();
+      if (d.access) {
+        _access = d.access;
+        const retry = await fetch(`${BASE}${path}`, {
+          ...options, headers: { ...headers, Authorization: `Bearer ${_access}` },
+        });
+        const retryData = await retry.json();
+        if (!retry.ok) throw retryData;
+        return retryData;
+      }
+    } catch {
+      clearTokens();
+      window.dispatchEvent(new Event('amapay:logout'));
+      throw { detail: 'Session expired. Please log in again.' };
+    }
+  }
+
+  let data;
+  try { data = await res.json(); } catch { data = {}; }
+  if (!res.ok) throw data;
+  return data;
+};
+
+// ── AUTH ──────────────────────────────────────────────────────────
+export const auth = {
+  registerStep1:    (d)  => request('/auth/register/step1/', { method: 'POST', body: JSON.stringify(d) }),
+  verifyOTP:        (d)  => request('/auth/register/otp/',   { method: 'POST', body: JSON.stringify(d) }),
+  resendOTP:        (email) => request('/auth/register/otp/resend/', { method: 'POST', body: JSON.stringify({ email }) }),
+  completeRegister: (d)  => request('/auth/register/complete/', { method: 'POST', body: JSON.stringify(d) }),
+
+  login: async (email, password) => {
+    const data = await request('/auth/login/', { method: 'POST', body: JSON.stringify({ email, password }) });
+    setTokens(data.access, data.refresh);
+    return data;
+  },
+  logout: async () => {
+    try { await request('/auth/logout/', { method: 'POST', body: JSON.stringify({ refresh: _refresh }) }); }
+    finally { clearTokens(); }
+  },
+
+  getProfile:    () => request('/auth/profile/'),
+  updateProfile: (d) => request('/auth/profile/', { method: 'PATCH', body: JSON.stringify(d) }),
+  changePin:     (d) => request('/auth/pin/change/', { method: 'POST', body: JSON.stringify(d) }),
+  toggleBiometric: () => request('/auth/biometric/', { method: 'POST' }),
+  freezeAccount:   () => request('/auth/freeze/',    { method: 'POST' }),
+  getSessions:     () => request('/auth/sessions/'),
+  endSession:    (id) => request(`/auth/sessions/${id}/end/`, { method: 'DELETE' }),
+  endAllSessions:  () => request('/auth/sessions/end-all/', { method: 'DELETE' }),
+};
+
+// ── WALLET ────────────────────────────────────────────────────────
+export const wallet = {
+  get:               () => request('/wallet/'),
+  getBeneficiaries:  () => request('/wallet/beneficiaries/'),
+  addBeneficiary:   (d) => request('/wallet/beneficiaries/', { method: 'POST', body: JSON.stringify(d) }),
+  deleteBeneficiary:(id) => request(`/wallet/beneficiaries/${id}/`, { method: 'DELETE' }),
+  toggleFavourite:  (id) => request(`/wallet/beneficiaries/${id}/favourite/`, { method: 'POST' }),
+};
+
+// ── TRANSACTIONS ─────────────────────────────────────────────────
+export const transactions = {
+  getAll:      (params = {}) => request(`/transactions/?${new URLSearchParams(params)}`),
+  getOne:      (id)  => request(`/transactions/${id}/`),
+  sendInternal:(d)   => request('/transactions/transfer/internal/', { method: 'POST', body: JSON.stringify(d) }),
+  buyAirtime:  (d)   => request('/transactions/airtime/', { method: 'POST', body: JSON.stringify(d) }),
+  buyData:     (d)   => request('/transactions/data/',    { method: 'POST', body: JSON.stringify(d) }),
+};
+
+// ── BUDGETS ──────────────────────────────────────────────────────
+export const budgets = {
+  getAll:    (m, y) => request(`/budgets/?month=${m}&year=${y}`),
+  create:    (d)    => request('/budgets/', { method: 'POST', body: JSON.stringify(d) }),
+  update:    (id,d) => request(`/budgets/${id}/`, { method: 'PATCH', body: JSON.stringify(d) }),
+  delete:    (id)   => request(`/budgets/${id}/`, { method: 'DELETE' }),
+  getSummary:(m, y) => request(`/budgets/summary/?month=${m}&year=${y}`),
+  getIncome: (m, y) => request(`/budgets/income/?month=${m}&year=${y}`),
+  addIncome: (d)    => request('/budgets/income/', { method: 'POST', body: JSON.stringify(d) }),
+};
+
+// ── SAVINGS ──────────────────────────────────────────────────────
+export const savings = {
+  getAll:    () => request('/savings/'),
+  getSummary:() => request('/savings/summary/'),
+  create:    (d) => request('/savings/', { method: 'POST', body: JSON.stringify(d) }),
+  update:   (id,d)=> request(`/savings/${id}/`, { method: 'PATCH', body: JSON.stringify(d) }),
+  delete:    (id) => request(`/savings/${id}/`, { method: 'DELETE' }),
+  deposit:  (id,d)=> request(`/savings/${id}/deposit/`, { method: 'POST', body: JSON.stringify(d) }),
+  withdraw: (id,d)=> request(`/savings/${id}/withdraw/`, { method: 'POST', body: JSON.stringify(d) }),
+};
+
+// ── ISLAMIC FINANCE ──────────────────────────────────────────────
+export const islamicFinance = {
+  calculateZakat: (d)    => request('/islamic-finance/zakat/calculate/', { method: 'POST', body: JSON.stringify(d) }),
+  payZakat:       (d)    => request('/islamic-finance/zakat/pay/',       { method: 'POST', body: JSON.stringify(d) }),
+  getCampaigns:   ()     => request('/islamic-finance/sadaqah/campaigns/'),
+  donate:         (d)    => request('/islamic-finance/sadaqah/donate/',  { method: 'POST', body: JSON.stringify(d) }),
+  getLoans:       ()     => request('/islamic-finance/qard/'),
+  requestLoan:    (d)    => request('/islamic-finance/qard/',            { method: 'POST', body: JSON.stringify(d) }),
+  repayLoan:      (id,d) => request(`/islamic-finance/qard/${id}/repay/`,{ method: 'POST', body: JSON.stringify(d) }),
+};
+
+// ── SCHOLARSHIP ──────────────────────────────────────────────────
+export const scholarship = {
+  getAll:  ()    => request('/scholarship/'),
+  create:  (d)   => request('/scholarship/', { method: 'POST', body: JSON.stringify(d) }),
+  update:  (id,d)=> request(`/scholarship/${id}/`, { method: 'PATCH', body: JSON.stringify(d) }),
+  delete:  (id)  => request(`/scholarship/${id}/`, { method: 'DELETE' }),
+};
+
+// ── STUDENT FINANCE ──────────────────────────────────────────────
+export const studentFinance = {
+  getExpenses:  (m,y) => request(`/student-finance/?month=${m}&year=${y}`),
+  addExpense:   (d)   => request('/student-finance/', { method: 'POST', body: JSON.stringify(d) }),
+  getSummary:   (m,y) => request(`/student-finance/summary/?month=${m}&year=${y}`),
+  getAllowance:  ()    => request('/student-finance/allowance/'),
+  addAllowance: (d)   => request('/student-finance/allowance/', { method: 'POST', body: JSON.stringify(d) }),
+};
+
+// ── NOTIFICATIONS ─────────────────────────────────────────────────
+export const notifications = {
+  getAll:      (unread) => request(`/notifications/${unread ? '?unread=1' : ''}`),
+  getUnreadCount: ()    => request('/notifications/unread-count/'),
+  markRead:     (id)    => request(`/notifications/${id}/read/`, { method: 'PATCH' }),
+  markAllRead:  ()      => request('/notifications/mark-all-read/', { method: 'POST' }),
+  delete:       (id)    => request(`/notifications/${id}/delete/`, { method: 'DELETE' }),
+};
+
+// ── REPORTS & AI ─────────────────────────────────────────────────
+export const reports = {
+  getMonthly: (m,y)     => request(`/reports/monthly/?month=${m}&year=${y}`),
+  chatWithAI: (messages) => request('/reports/ai/chat/', { method: 'POST', body: JSON.stringify({ messages }) }),
+  getAIPrompts:()        => request('/reports/ai/prompts/'),
+};
