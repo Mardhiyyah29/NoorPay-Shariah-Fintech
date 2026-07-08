@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 
 /*
- * AmaPay - Shari'ah-Compliant Digital Financial Platform
+ * NoorPay - Shari'ah-Compliant Digital Financial Platform
  * Final Year Project - Abdurkabir Mardhiyyah
  * Department of Computer Science, 2024/2025
  *
@@ -15,28 +15,47 @@ import { useState, useEffect, useRef } from "react";
 
 // ── Color tokens ──────────────────────────────────────────────────
 const C = {
-  green:   "#1B6B3A",  // Primary Islamic green
-  greenL:  "#2D8653",  // Lighter green
-  greenPale:"#E8F5EE", // Very light green bg
-  amber:   "#D4820A",  // Gold/amber accent
-  amberL:  "#FEF3C7",  // Light amber bg
-  blue:    "#2563EB",  // Data/info blue
-  blueL:   "#EFF6FF",  // Light blue bg
-  red:     "#DC2626",  // Danger
-  redL:    "#FEF2F2",  // Light red bg
-  purple:  "#7C3AED",  // Secondary
-  purpleL: "#F5F3FF",
-  white:   "#FFFFFF",
-  grey50:  "#F9FAFB",
-  grey100: "#F3F4F6",
-  grey200: "#E5E7EB",
-  grey300: "#D1D5DB",
-  grey500: "#6B7280",
-  grey700: "#374151",
-  grey900: "#111827",
-  text:    "#1F2937",
-  textSub: "#6B7280",
+  green:    "#0F5132",  // Deeper, richer Islamic green (primary)
+  greenL:   "#1B8A4C",  // Vivid mid green
+  greenXL:  "#34D399",  // Bright accent green (highlights, success glows)
+  greenPale:"#E8F5EE",  // Very light green bg
+  greenDeep:"#0A3D26",  // Near-black green for gradient depth
+  amber:    "#B8860B",  // Rich gold (primary accent)
+  amberL:   "#F0B429",  // Bright gold highlight
+  amberXL:  "#FFD666",  // Shiny gold shimmer
+  amberPale:"#FEF3C7",  // Light amber bg
+  blue:     "#1D4ED8",  // Deeper data/info blue
+  blueL:    "#3B82F6",
+  bluePale: "#EFF6FF",
+  red:      "#B91C1C",  // Danger, deeper
+  redL:     "#EF4444",
+  redPale:  "#FEF2F2",
+  purple:   "#6D28D9",  // Secondary, deeper
+  purpleL:  "#8B5CF6",
+  purplePale:"#F5F3FF",
+  white:    "#FFFFFF",
+  grey50:   "#F9FAFB",
+  grey100:  "#F3F4F6",
+  grey200:  "#E5E7EB",
+  grey300:  "#D1D5DB",
+  grey500:  "#6B7280",
+  grey700:  "#374151",
+  grey900:  "#111827",
+  text:     "#1F2937",
+  textSub:  "#6B7280",
+
+  // Gradients — use as backgroundImage for a shiny, premium finish
+  gradGreen:  "linear-gradient(135deg, #0F5132 0%, #1B8A4C 55%, #34D399 100%)",
+  gradGold:   "linear-gradient(135deg, #B8860B 0%, #D4A017 50%, #FFD666 100%)",
+  gradDark:   "linear-gradient(160deg, #0A3D26 0%, #0F5132 60%, #1B8A4C 100%)",
+  gradCard:   "linear-gradient(135deg, #FFFFFF 0%, #F9FAFB 100%)",
+  glowGreen:  "0 8px 24px rgba(15,81,50,0.25)",
+  glowGold:   "0 6px 18px rgba(184,134,11,0.30)",
 };
+
+// Convenience pale-background aliases used by a couple of legacy call sites.
+C.amberBgSoft = "#FEF3C7";
+C.greenBgSoft = "#E8F5EE";
 
 // ── Global styles ─────────────────────────────────────────────────
 const GS = () => (
@@ -57,8 +76,8 @@ const GS = () => (
 // ── Small reusable components ─────────────────────────────────────
 const Card = ({ children, style = {}, onClick }) => (
   <div onClick={onClick} style={{
-    background: C.white, borderRadius: 8, padding: 16,
-    border: `1px solid ${C.grey200}`, boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
+    background: C.gradCard, borderRadius: 10, padding: 16,
+    border: `1px solid ${C.grey200}`, boxShadow: "0 2px 10px rgba(17,24,39,0.06)",
     ...style
   }}>{children}</div>
 );
@@ -67,21 +86,28 @@ const Btn = ({ children, onClick, variant = "primary", size = "md", icon, full, 
   const pad = size === "sm" ? "6px 12px" : size === "lg" ? "13px 24px" : "9px 18px";
   const fs  = size === "sm" ? 12 : 14;
   const bgMap = {
-    primary: C.green, secondary: C.grey700, danger: C.red,
-    amber: C.amber, blue: C.blue, outline: "transparent", ghost: C.grey100,
+    primary: C.gradGreen, secondary: C.grey700, danger: C.red,
+    amber: C.gradGold, blue: C.blue, outline: "transparent", ghost: C.grey100,
   };
   const colMap = {
     primary: C.white, secondary: C.white, danger: C.white,
     amber: C.white, blue: C.white, outline: C.green, ghost: C.grey700,
   };
+  const glowMap = { primary: C.glowGreen, amber: C.glowGold };
+  const isGradient = variant === "primary" || variant === "amber";
   return (
     <button disabled={disabled} onClick={onClick} style={{
-      padding: pad, background: bgMap[variant], color: colMap[variant],
+      padding: pad,
+      [isGradient ? "backgroundImage" : "background"]: bgMap[variant],
+      color: colMap[variant],
       border: variant === "outline" ? `1.5px solid ${C.green}` : "none",
-      borderRadius: 6, fontSize: fs, fontWeight: 600, cursor: disabled ? "not-allowed" : "pointer",
+      borderRadius: 8, fontSize: fs, fontWeight: 600, cursor: disabled ? "not-allowed" : "pointer",
       display: "inline-flex", alignItems: "center", gap: 6,
       width: full ? "100%" : "auto", justifyContent: full ? "center" : "flex-start",
-      opacity: disabled ? 0.5 : 1, ...style
+      opacity: disabled ? 0.5 : 1,
+      boxShadow: disabled ? "none" : (glowMap[variant] || "none"),
+      transition: "transform 0.15s ease, box-shadow 0.15s ease",
+      ...style
     }}>
       {icon && <span>{icon}</span>}{children}
     </button>
@@ -253,16 +279,205 @@ const Donut = ({ slices, size = 120 }) => {
 // SCREENS
 // ════════════════════════════════════════════════════════════════
 
+// ── Landing Page (real responsive marketing page — desktop/tablet/mobile) ──
+const LandingStyles = () => (
+  <style>{`
+    .np-land { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: ${C.text}; }
+    .np-land-nav { max-width: 1180px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; padding: 20px 24px; }
+    .np-land-navlinks { display: flex; gap: 32px; align-items: center; }
+    .np-land-hero { max-width: 1180px; margin: 0 auto; display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 48px; align-items: center; padding: 40px 24px 80px; }
+    .np-land-features { max-width: 1180px; margin: 0 auto; padding: 60px 24px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+    .np-land-steps { max-width: 1180px; margin: 0 auto; padding: 60px 24px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+    .np-land-trust { display: flex; flex-wrap: wrap; gap: 12px; }
+    .np-land-footer-grid { max-width: 1180px; margin: 0 auto; padding: 48px 24px; display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 32px; }
+    .np-land-phone { width: 100%; max-width: 320px; margin: 0 auto; }
+
+    @media (max-width: 900px) {
+      .np-land-hero { grid-template-columns: 1fr; padding-bottom: 48px; text-align: center; }
+      .np-land-features { grid-template-columns: repeat(2, 1fr); }
+      .np-land-steps { grid-template-columns: 1fr; }
+      .np-land-footer-grid { grid-template-columns: 1fr 1fr; }
+      .np-land-navlinks-desktop { display: none !important; }
+      .np-land-phone { margin-top: 24px; }
+    }
+    @media (max-width: 560px) {
+      .np-land-features { grid-template-columns: 1fr; }
+      .np-land-footer-grid { grid-template-columns: 1fr; }
+      .np-land-hero h1 { font-size: 34px !important; }
+    }
+  `}</style>
+);
+
+const LandingFeature = ({ icon, title, desc, color }) => (
+  <div style={{ background: C.white, borderRadius: 14, padding: 24, border: `1px solid ${C.grey200}`, boxShadow: "0 2px 10px rgba(17,24,39,0.05)", transition: "transform 0.2s ease" }}>
+    <div style={{ width: 48, height: 48, borderRadius: 12, background: `${color}15`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, marginBottom: 16 }}>{icon}</div>
+    <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 6, color: C.text }}>{title}</div>
+    <div style={{ fontSize: 13.5, color: C.textSub, lineHeight: 1.6 }}>{desc}</div>
+  </div>
+);
+
+const LandingPage = ({ onGetStarted, onLogin }) => {
+  const features = [
+    { icon: "💰", title: "Digital Wallet", desc: "Send, receive, and manage your money instantly — zero fees on NoorPay-to-NoorPay transfers.", color: C.green },
+    { icon: "🕌", title: "Zakat Calculator", desc: "Automatic Nisab and 2.5% Zakat calculation on cash, gold, and business assets, with full payment history.", color: C.amber },
+    { icon: "🤝", title: "Qard Hasan Loans", desc: "Interest-free benevolent loans with transparent, equal installment schedules — no hidden charges, ever.", color: C.blue },
+    { icon: "📊", title: "Smart Budgeting", desc: "Category budgets, spending alerts, and personalised insights to help you stay in control.", color: C.purple },
+    { icon: "🎯", title: "Savings Goals", desc: "Fixed, flexible, and goal-based savings for tuition, Hajj, Umrah, business, and more.", color: C.greenL },
+    { icon: "📖", title: "Learning Hub", desc: "Bite-sized Islamic finance literacy — articles, courses, and FAQs, built into the app.", color: C.amberL },
+  ];
+
+  const steps = [
+    { n: "01", title: "Create your account", desc: "Sign up in minutes with just your email and phone number — no paperwork, no branch visits." },
+    { n: "02", title: "Fund your wallet", desc: "Deposit into your NoorPay wallet and get instant access to every feature." },
+    { n: "03", title: "Bank with confidence", desc: "Send money, save for goals, pay Zakat, and track spending — all fully Shari'ah-compliant." },
+  ];
+
+  return (
+    <div className="np-land" style={{ background: C.grey50, minHeight: "100vh" }}>
+      <LandingStyles />
+
+      {/* Nav */}
+      <div className="np-land-nav">
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ fontSize: 24 }}>🕌</span>
+          <span style={{ fontSize: 20, fontWeight: 800, color: C.green, letterSpacing: -0.5 }}>NoorPay</span>
+        </div>
+        <div className="np-land-navlinks np-land-navlinks-desktop">
+          <span style={{ fontSize: 14, fontWeight: 600, color: C.grey700, cursor: "pointer" }}>Features</span>
+          <span style={{ fontSize: 14, fontWeight: 600, color: C.grey700, cursor: "pointer" }}>Islamic Finance</span>
+          <span style={{ fontSize: 14, fontWeight: 600, color: C.grey700, cursor: "pointer" }}>How it works</span>
+        </div>
+        <div style={{ display: "flex", gap: 10 }}>
+          <Btn variant="ghost" size="sm" onClick={onLogin}>Sign In</Btn>
+          <Btn variant="primary" size="sm" onClick={onGetStarted}>Get Started</Btn>
+        </div>
+      </div>
+
+      {/* Hero */}
+      <div className="np-land-hero">
+        <div>
+          <Badge color={C.amber}>🌙 100% Shari'ah-Compliant</Badge>
+          <h1 style={{ fontSize: 46, fontWeight: 800, lineHeight: 1.15, margin: "16px 0", letterSpacing: -1, color: C.text }}>
+            Digital banking that honors your <span style={{ backgroundImage: C.gradGreen, WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" }}>values</span>.
+          </h1>
+          <p style={{ fontSize: 17, color: C.textSub, lineHeight: 1.7, marginBottom: 28, maxWidth: 480 }}>
+            NoorPay is a Shari'ah-compliant digital financial platform — wallet, savings, budgeting,
+            Zakat, and Qard Hasan, built with no Riba, no gambling, and no hidden fees.
+          </p>
+          <div style={{ display: "flex", gap: 12, marginBottom: 32, flexWrap: "wrap" }}>
+            <Btn variant="primary" size="lg" icon="🚀" onClick={onGetStarted}>Get Started Free</Btn>
+            <Btn variant="outline" size="lg" onClick={onLogin}>Sign In</Btn>
+          </div>
+          <div className="np-land-trust">
+            <Badge color={C.green}>✅ Zero-Interest Loans</Badge>
+            <Badge color={C.amber}>✅ 2.5% Zakat, Automated</Badge>
+            <Badge color={C.blue}>✅ Fee-Free Transfers</Badge>
+          </div>
+        </div>
+
+        {/* Phone mockup */}
+        <div className="np-land-phone">
+          <div style={{ backgroundImage: C.gradGreen, borderRadius: 28, padding: 20, boxShadow: C.glowGreen }}>
+            <div style={{ background: C.white, borderRadius: 18, padding: 18 }}>
+              <div style={{ fontSize: 11, color: C.textSub, marginBottom: 4 }}>Available Balance</div>
+              <div style={{ fontSize: 26, fontWeight: 800, color: C.text, marginBottom: 10 }}>₦487,250.00</div>
+              <div style={{ fontSize: 11, color: C.green, fontWeight: 600, marginBottom: 16 }}>✅ Shari'ah-Compliant Account</div>
+              <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+                <div style={{ flex: 1, backgroundImage: C.gradGreen, borderRadius: 8, padding: "10px 0", textAlign: "center", color: C.white, fontSize: 12, fontWeight: 700 }}>💸 Send</div>
+                <div style={{ flex: 1, background: C.grey100, borderRadius: 8, padding: "10px 0", textAlign: "center", color: C.grey700, fontSize: 12, fontWeight: 700 }}>📥 Receive</div>
+              </div>
+              {[["🕌", "Zakat Payment", "-₦25,000"], ["🤝", "Qard Hasan", "+₦50,000"], ["💰", "Deposit", "+₦100,000"]].map((r, i) => (
+                <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "9px 0", borderBottom: i < 2 ? `1px solid ${C.grey100}` : "none" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span>{r[0]}</span>
+                    <span style={{ fontSize: 12.5, color: C.text, fontWeight: 600 }}>{r[1]}</span>
+                  </div>
+                  <span style={{ fontSize: 12.5, fontWeight: 700, color: r[2].startsWith("+") ? C.green : C.red }}>{r[2]}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Features */}
+      <div style={{ textAlign: "center", marginBottom: 8 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: C.amber, letterSpacing: 1, textTransform: "uppercase" }}>Everything you need</div>
+        <h2 style={{ fontSize: 30, fontWeight: 800, color: C.text, marginTop: 6 }}>One app, fully compliant</h2>
+      </div>
+      <div className="np-land-features">
+        {features.map((f, i) => <LandingFeature key={i} {...f} />)}
+      </div>
+
+      {/* How it works */}
+      <div style={{ background: C.greenPale }}>
+        <div style={{ textAlign: "center", paddingTop: 56 }}>
+          <h2 style={{ fontSize: 30, fontWeight: 800, color: C.text }}>How it works</h2>
+        </div>
+        <div className="np-land-steps">
+          {steps.map((s, i) => (
+            <div key={i} style={{ textAlign: "center" }}>
+              <div style={{ width: 56, height: 56, borderRadius: "50%", backgroundImage: C.gradGreen, color: C.white, fontWeight: 800, fontSize: 18, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px", boxShadow: C.glowGreen }}>{s.n}</div>
+              <div style={{ fontWeight: 700, fontSize: 17, marginBottom: 8, color: C.text }}>{s.title}</div>
+              <div style={{ fontSize: 13.5, color: C.textSub, lineHeight: 1.6, maxWidth: 280, margin: "0 auto" }}>{s.desc}</div>
+            </div>
+          ))}
+        </div>
+        <div style={{ textAlign: "center", paddingBottom: 56 }}>
+          <Btn variant="primary" size="lg" icon="🚀" onClick={onGetStarted}>Create Your Free Account</Btn>
+        </div>
+      </div>
+
+      {/* Footer */}
+      <div style={{ background: C.grey900 }}>
+        <div className="np-land-footer-grid">
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+              <span style={{ fontSize: 22 }}>🕌</span>
+              <span style={{ fontSize: 18, fontWeight: 800, color: C.white }}>NoorPay</span>
+            </div>
+            <p style={{ fontSize: 13, color: C.grey500, lineHeight: 1.6, maxWidth: 280 }}>
+              A Shari'ah-compliant digital financial platform, built as a final-year Computer Science
+              project at Fountain University, Osogbo.
+            </p>
+          </div>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: C.white, marginBottom: 12 }}>Product</div>
+            {["Wallet", "Savings", "Budgeting", "Zakat"].map((l, i) => (
+              <div key={i} style={{ fontSize: 13, color: C.grey500, marginBottom: 8 }}>{l}</div>
+            ))}
+          </div>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: C.white, marginBottom: 12 }}>Islamic Finance</div>
+            {["Qard Hasan", "Sadaqah", "Learning Hub", "AI Advisor"].map((l, i) => (
+              <div key={i} style={{ fontSize: 13, color: C.grey500, marginBottom: 8 }}>{l}</div>
+            ))}
+          </div>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: C.white, marginBottom: 12 }}>Legal</div>
+            {["Privacy Policy", "Terms of Service", "Shari'ah Compliance"].map((l, i) => (
+              <div key={i} style={{ fontSize: 13, color: C.grey500, marginBottom: 8 }}>{l}</div>
+            ))}
+          </div>
+        </div>
+        <div style={{ borderTop: `1px solid rgba(255,255,255,0.1)`, padding: "20px 24px", textAlign: "center", fontSize: 12, color: C.grey500 }}>
+          © {new Date().getFullYear()} NoorPay. All rights reserved. · "وَأَحَلَّ اللَّهُ الْبَيْعَ وَحَرَّمَ الرِّبَا" — Al-Baqarah 2:275
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ── Splash ────────────────────────────────────────────────────────
 const Splash = ({ onDone }) => {
   useEffect(() => { const t = setTimeout(onDone, 1800); return () => clearTimeout(t); }, []);
   return (
     <div style={{ minHeight: "100vh", background: C.green, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24 }}>
       <div style={{ width: 72, height: 72, background: "rgba(255,255,255,0.15)", borderRadius: 18, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 36, marginBottom: 20 }}>🕌</div>
-      <div style={{ fontSize: 32, fontWeight: 800, color: C.white, letterSpacing: -1, marginBottom: 6 }}>AmaPay</div>
+      <div style={{ fontSize: 32, fontWeight: 800, color: C.white, letterSpacing: -1, marginBottom: 6 }}>NoorPay</div>
       <div style={{ fontSize: 14, color: "rgba(255,255,255,0.7)", textAlign: "center", marginBottom: 40 }}>Shari'ah-Compliant Digital Finance</div>
       <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", fontStyle: "italic", textAlign: "center" }}>
-        {/* "وَأَحَلَّ اللَّهُ الْبَيْعَ وَحَرَّمَ الرِّبَا"<br />Al-Baqarah 2:275 */}
+        "وَأَحَلَّ اللَّهُ الْبَيْعَ وَحَرَّمَ الرِّبَا"<br />Al-Baqarah 2:275
       </div>
     </div>
   );
@@ -283,13 +498,13 @@ const Login = ({ onLogin, onReg }) => {
     <div style={{ minHeight: "100vh", background: C.grey100 }}>
       <div style={{ background: C.green, padding: "56px 24px 32px", textAlign: "center" }}>
         <div style={{ fontSize: 28, marginBottom: 8 }}>🕌</div>
-        <div style={{ fontSize: 26, fontWeight: 800, color: C.white, letterSpacing: -0.5 }}>AmaPay</div>
+        <div style={{ fontSize: 26, fontWeight: 800, color: C.white, letterSpacing: -0.5 }}>NoorPay</div>
         <div style={{ fontSize: 13, color: "rgba(255,255,255,0.7)", marginTop: 4 }}>Halal Finance · For Everyone</div>
       </div>
       <div style={{ padding: 20 }}>
         <Card style={{ marginBottom: 16 }}>
           <div style={{ fontWeight: 700, fontSize: 17, color: C.text, marginBottom: 4 }}>Welcome back</div>
-          <div style={{ fontSize: 13, color: C.textSub, marginBottom: 18 }}>Sign in to your AmaPay account</div>
+          <div style={{ fontSize: 13, color: C.textSub, marginBottom: 18 }}>Sign in to your NoorPay account</div>
           <Inp label="Email address" type="email" value={email} onChange={setEmail} placeholder="you@example.com" />
           <Inp label="Password" type="password" value={pass} onChange={setPass} placeholder="Enter your password" />
           {err && <div style={{ fontSize: 12, color: C.red, marginBottom: 10 }}>{err}</div>}
@@ -382,7 +597,7 @@ const Register = ({ onDone, onLogin }) => {
         <div style={{ fontSize: 56, marginBottom: 16 }}>🎉</div>
         <div style={{ fontSize: 22, fontWeight: 700, color: C.text, marginBottom: 8 }}>Account Created!</div>
         <div style={{ fontSize: 14, color: C.textSub, marginBottom: 24, lineHeight: 1.6 }}>
-          Assalamu alaykum, <strong>{form.name || "friend"}</strong>!<br />Your AmaPay account is ready.
+          Assalamu alaykum, <strong>{form.name || "friend"}</strong>!<br />Your NoorPay account is ready.
         </div>
         <Btn full variant="primary" onClick={onDone}>Go to Dashboard →</Btn>
       </div>
@@ -415,8 +630,9 @@ const Home = ({ nav, user = "Abdurkabir" }) => {
   return (
     <div style={{ paddingBottom: 80 }}>
       {/* Header */}
-      <div style={{ background: C.green, padding: "48px 16px 70px", position: "relative" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+      <div style={{ backgroundImage: C.gradGreen, padding: "48px 16px 70px", position: "relative", boxShadow: C.glowGreen }}>
+        <div style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundImage: "radial-gradient(circle at 85% -10%, rgba(255,214,102,0.18), transparent 55%)", pointerEvents: "none" }} />
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", position: "relative" }}>
           <div>
             <div style={{ fontSize: 12, color: "rgba(255,255,255,0.65)", marginBottom: 2 }}>Assalamu alaykum 🌙</div>
             <div style={{ fontSize: 18, fontWeight: 700, color: C.white }}>{user}</div>
@@ -463,14 +679,6 @@ const Home = ({ nav, user = "Abdurkabir" }) => {
           </div>
         </Card>
 
-        {/* SDG Alignment strip */}
-        <div style={{ background: C.greenPale, border: `1px solid ${C.green}30`, borderRadius: 8, padding: "10px 14px", marginBottom: 14, display: "flex", gap: 6, flexWrap: "wrap" }}>
-          <span style={{ fontSize: 11, fontWeight: 700, color: C.green, width: "100%", marginBottom: 4 }}>🌍 UN SDG Alignment</span>
-          {["SDG 1 No Poverty", "SDG 4 Education", "SDG 8 Growth", "SDG 10 Equality"].map((s, i) => (
-            <Badge key={i} color={C.green}>{s}</Badge>
-          ))}
-        </div>
-
         {/* Spending Chart */}
         <Card style={{ marginBottom: 14 }}>
           <SectionHeader title="Monthly Spending" sub="June 2025" action="See report" onAction={() => nav("reports")} />
@@ -506,7 +714,7 @@ const Home = ({ nav, user = "Abdurkabir" }) => {
           </div>
           {[
             { icon: "💰", title: "Salary Credit",      sub: "GTBank Payroll",    amt: "+₦250,000", col: C.green  },
-            { icon: "💸", title: "Transfer to Ahmad",  sub: "AmaPay Transfer",   amt: "-₦15,000",  col: C.red    },
+            { icon: "💸", title: "Transfer to Ahmad",  sub: "NoorPay Transfer",   amt: "-₦15,000",  col: C.red    },
             { icon: "📱", title: "MTN Data — 5GB",     sub: "Bills & Airtime",   amt: "-₦2,500",   col: C.red    },
             { icon: "⭐", title: "Zakat Payment",       sub: "Islamic Finance",   amt: "-₦8,000",   col: C.amber  },
             { icon: "💰", title: "Qard Repayment",      sub: "Community Finance", amt: "+₦10,000",  col: C.green  },
@@ -659,7 +867,7 @@ const Finance = ({ nav }) => {
           ))}
           <div style={{ background: C.greenPale, border: `1px solid ${C.green}30`, borderRadius: 8, padding: 12, fontSize: 12, color: C.grey700 }}>
             <strong style={{ color: C.green }}>✅ Halal Compliance Checker</strong><br />
-            All products on AmaPay are reviewed against AAOIFI Shari'ah Standards to ensure zero Riba, Gharar, and Maysir.
+            All products on NoorPay are reviewed against AAOIFI Shari'ah Standards to ensure zero Riba, Gharar, and Maysir.
           </div>
         </>}
       </div>
@@ -987,7 +1195,7 @@ const Community = ({ nav }) => {
             <div style={{ fontSize: 13, color: C.textSub, lineHeight: 1.6, marginBottom: 10 }}>
               Waqf is a perpetual Islamic endowment. You donate an asset or money once, and the benefits continue forever — even after your death.
             </div>
-            <div style={{ fontSize: 12, color: C.grey700, background: C.purpleL, borderRadius: 6, padding: 10 }}>
+            <div style={{ fontSize: 12, color: C.grey700, background: C.purplePale, borderRadius: 6, padding: 10 }}>
               "When a person dies, their deeds come to an end except for three: Sadaqah Jariyah (ongoing charity)..." — Hadith (Muslim)
             </div>
           </Card>
@@ -1193,7 +1401,7 @@ const ZakatModule = ({ nav }) => {
 const Onboard = ({ onDone }) => {
   const [s, setS] = useState(0);
   const slides = [
-    { e: "💰", t: "Riba-Free Finance",   b: "Every transaction on AmaPay is 100% Shari'ah-compliant. Zero interest, zero compromise on your deen." },
+    { e: "💰", t: "Riba-Free Finance",   b: "Every transaction on NoorPay is 100% Shari'ah-compliant. Zero interest, zero compromise on your deen." },
     { e: "📊", t: "Smart Budgeting",     b: "Track every naira, set halal budgets, monitor expenses by category, and stay financially disciplined." },
     { e: "🤝", t: "Community Finance",   b: "Pay Zakat, donate Sadaqah, request Qard Hasan loans, track scholarships — all from one platform." },
     { e: "🕌", t: "Islamic First",       b: "Built around Mudarabah, Musharakah, Murabahah, and Waqf. The only fintech app that never breaks Shari'ah." },
@@ -1250,19 +1458,19 @@ const ReceiveModal = ({ open, onClose }) => {
                   : null
               )
             )}
-            {/* AmaPay text */}
-            <text x="50" y="96" textAnchor="middle" fontSize="7" fontWeight="700" fill={C.green}>AmaPay</text>
+            {/* NoorPay text */}
+            <text x="50" y="96" textAnchor="middle" fontSize="7" fontWeight="700" fill={C.green}>NoorPay</text>
           </svg>
         </div>
         <p style={{ fontSize: 12, color: C.textSub, marginBottom: 14 }}>Scan QR code to pay · Or share account details below</p>
         <Card style={{ marginBottom: 14, background: C.greenPale, border: `1px solid ${C.green}30` }}>
-          <div style={{ fontSize: 11, color: C.textSub, marginBottom: 4 }}>AmaPay Account Number</div>
+          <div style={{ fontSize: 11, color: C.textSub, marginBottom: 4 }}>NoorPay Account Number</div>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10 }}>
             <span style={{ fontSize: 22, fontWeight: 800, color: C.green, letterSpacing: 2 }}>0123456789</span>
             <button onClick={() => setToast({ msg: "Account number copied!", type: "success" })}
               style={{ background: C.green + "18", border: "none", borderRadius: 6, padding: "4px 8px", cursor: "pointer", fontSize: 12, color: C.green }}>Copy</button>
           </div>
-          <div style={{ fontSize: 13, color: C.text, marginTop: 4, fontWeight: 600 }}>Abdurkabir Mardhiyyah · AmaPay</div>
+          <div style={{ fontSize: 13, color: C.text, marginTop: 4, fontWeight: 600 }}>Abdurkabir Mardhiyyah · NoorPay</div>
         </Card>
         <Btn full variant="primary" icon="📤">Share Payment Link</Btn>
       </div>
@@ -1378,7 +1586,7 @@ const RewardsScreen = ({ nav }) => {
 
           <Card style={{ background: C.greenPale, border: `1px solid ${C.green}30` }}>
             <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 6 }}>👥 Refer & Earn</div>
-            <div style={{ fontSize: 12, color: C.textSub, marginBottom: 12 }}>Share your referral code and earn 500 points for every friend who joins AmaPay.</div>
+            <div style={{ fontSize: 12, color: C.textSub, marginBottom: 12 }}>Share your referral code and earn 500 points for every friend who joins NoorPay.</div>
             <div style={{ background: C.white, borderRadius: 8, padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
               <span style={{ fontWeight: 800, fontSize: 18, color: C.green, letterSpacing: 3 }}>AMAPA-7823</span>
               <button onClick={() => setToast({ msg: "Referral code copied!", type: "success" })} style={{ background: C.green + "18", border: "none", borderRadius: 6, padding: "5px 10px", cursor: "pointer", fontSize: 12, color: C.green }}>Copy</button>
@@ -1425,13 +1633,13 @@ const RewardsScreen = ({ nav }) => {
 const AIAdvisor = ({ nav }) => {
   const [msgs, setMsgs] = useState([{
     role: "assistant",
-    text: "Assalamu alaykum! 🌙\n\nI'm your AmaPay AI Financial Advisor — powered by Claude, constrained by Shari\'ah.\n\nI specialise in Islamic finance, Zakat calculations, halal investing, and Nigerian personal finance.\n\nHow can I help you today?",
+    text: "Assalamu alaykum! 🌙\n\nI'm your NoorPay AI Financial Advisor — powered by Claude, constrained by Shari\'ah.\n\nI specialise in Islamic finance, Zakat calculations, halal investing, and Nigerian personal finance.\n\nHow can I help you today?",
   }]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const endRef = useRef(null);
 
-  const SYSTEM = "You are AmaPay\'s Shari\'ah-compliant AI Financial Advisor for Nigerian Muslim users. " +
+  const SYSTEM = "You are NoorPay\'s Shari\'ah-compliant AI Financial Advisor for Nigerian Muslim users. " +
     "Specialise in: Islamic finance (Mudarabah, Musharakah, Murabahah, Zakat, Sadaqah, Qard Hasan, Waqf), " +
     "Nigerian personal finance, budgeting, saving, scholarships, student finance, and halal investing. " +
     "STRICT RULES: 1) All advice must be Riba-free 2) Open with Islamic greetings warmly " +
@@ -1640,7 +1848,7 @@ const SecurityScreen = ({ nav }) => {
               </div>
               {s.active
                 ? <Badge color={C.green}>Active</Badge>
-                : <button onClick={() => setToast({ msg: "Session terminated.", type: "success" })} style={{ background: C.redL, border: "none", borderRadius: 6, padding: "4px 10px", color: C.red, fontSize: 11, fontWeight: 600, cursor: "pointer" }}>End</button>
+                : <button onClick={() => setToast({ msg: "Session terminated.", type: "success" })} style={{ background: C.redPale, border: "none", borderRadius: 6, padding: "4px 10px", color: C.red, fontSize: 11, fontWeight: 600, cursor: "pointer" }}>End</button>
               }
             </div>
           ))}
@@ -1657,7 +1865,7 @@ const SecurityScreen = ({ nav }) => {
             { l: "Report Suspicious Activity", sub: "Alert our security team",            icon: "⚠️" },
             { l: "Delete Account",             sub: "Permanently remove your account",    icon: "🗑️" },
           ].map((item, i, arr) => (
-            <button key={i} onClick={() => setToast({ msg: `${item.l} — please contact support@amapay.ng`, type: "warn" })}
+            <button key={i} onClick={() => setToast({ msg: `${item.l} — please contact support@noorpay.ng`, type: "warn" })}
               style={{ width: "100%", display: "flex", alignItems: "center", gap: 12, padding: "13px 14px", background: "none", border: "none", borderBottom: i < arr.length - 1 ? `1px solid ${C.grey100}` : "none", cursor: "pointer", textAlign: "left" }}>
               <span style={{ fontSize: 20 }}>{item.icon}</span>
               <div style={{ flex: 1 }}>
@@ -1712,7 +1920,7 @@ const AppSettings = ({ nav }) => {
   return (
     <div style={{ paddingBottom: 80 }}>
       {toast && <Toast msg={toast.msg} type={toast.type} onDone={() => setToast(null)} />}
-      <PageHeader title="App Settings" sub="Customise your AmaPay experience" onBack={() => nav("me")} />
+      <PageHeader title="App Settings" sub="Customise your NoorPay experience" onBack={() => nav("me")} />
       <div style={{ padding: 14 }}>
 
         <div style={{ fontSize: 11, fontWeight: 700, color: C.textSub, letterSpacing: 1, textTransform: "uppercase", marginBottom: 6 }}>Appearance</div>
@@ -1731,7 +1939,7 @@ const AppSettings = ({ nav }) => {
 
         <div style={{ fontSize: 11, fontWeight: 700, color: C.textSub, letterSpacing: 1, textTransform: "uppercase", marginBottom: 6 }}>Notifications</div>
         <Card style={{ padding: "0 14px", marginBottom: 14 }}>
-          <Toggle on={notifs} onToggle={() => setNotifs(!notifs)} label="Push Notifications" sub="Allow AmaPay to send notifications" />
+          <Toggle on={notifs} onToggle={() => setNotifs(!notifs)} label="Push Notifications" sub="Allow NoorPay to send notifications" />
           <Toggle on={budgetAlert} onToggle={() => setBudgetAlert(!budgetAlert)} label="Budget Alerts" sub="Notify when spending exceeds budget" />
           <Toggle on={zakatRemind} onToggle={() => setZakatRemind(!zakatRemind)} label="Zakat Reminders" sub="Annual reminder to pay Zakat" />
           <Toggle on={scholarAlert} onToggle={() => setScholarAlert(!scholarAlert)} label="Scholarship Deadlines" sub="Alert 7 days before deadline" />
@@ -1751,11 +1959,11 @@ const AppSettings = ({ nav }) => {
         <Card style={{ marginBottom: 14 }}>
           {[
             ["App Version",          "v4.0.0 (Build 401)"],
-            ["Last Updated",         "July 2026"],
+            ["Last Updated",         "July 2025"],
             ["Shari'ah Compliance",  "AAOIFI Standards"],
-            ["FYP Session",          "2025/2026"],
+            ["FYP Session",          "2024/2025"],
             ["Developer",            "Abdurkabir Mardhiyyah"],
-            ["Support",              "help@amapay.ng"],
+            ["Support",              "help@noorpay.ng"],
           ].map(([k, v], i, arr) => (
             <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", borderBottom: i < arr.length - 1 ? `1px solid ${C.grey100}` : "none" }}>
               <span style={{ fontSize: 13, color: C.textSub }}>{k}</span>
@@ -1765,8 +1973,8 @@ const AppSettings = ({ nav }) => {
         </Card>
 
         <div style={{ background: C.greenPale, border: `1px solid ${C.green}30`, borderRadius: 8, padding: 12, textAlign: "center" }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: C.green, marginBottom: 4 }}>🕌 AmaPay v4.0</div>
-          <div style={{ fontSize: 11, color: C.textSub }}>Final Year Project · Abdurkabir Mardhiyyah<br />Department of Computer Science · 2025/2026</div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: C.green, marginBottom: 4 }}>🕌 NoorPay v4.0</div>
+          <div style={{ fontSize: 11, color: C.textSub }}>Final Year Project · Abdurkabir Mardhiyyah<br />Department of Computer Science · 2024/2025</div>
         </div>
       </div>
     </div>
@@ -1780,13 +1988,13 @@ const BeneficiariesScreen = ({ nav }) => {
   const [toast, setToast] = useState(null);
   const [search, setSearch] = useState("");
   const [bens, setBens] = useState([
-    { name: "Ahmad Musa",    bank: "AmaPay",   account: "0987654321", icon: "🧑", fav: true  },
+    { name: "Ahmad Musa",    bank: "NoorPay",   account: "0987654321", icon: "🧑", fav: true  },
     { name: "Fatimah Bello", bank: "GTBank",   account: "0112345678", icon: "👩", fav: true  },
-    { name: "Ibrahim Saleh", bank: "AmaPay",   account: "0123987654", icon: "👨", fav: false },
+    { name: "Ibrahim Saleh", bank: "NoorPay",   account: "0123987654", icon: "👨", fav: false },
     { name: "Aisha Yusuf",   bank: "Access",   account: "0445566778", icon: "👩", fav: false },
     { name: "Musa Ibrahim",  bank: "First Bank",account:"3344556677", icon: "🧑", fav: false },
   ]);
-  const [form, setForm] = useState({ name: "", bank: "AmaPay", account: "" });
+  const [form, setForm] = useState({ name: "", bank: "NoorPay", account: "" });
   const shown = bens.filter(b => b.name.toLowerCase().includes(search.toLowerCase()));
 
   return (
@@ -1841,13 +2049,13 @@ const BeneficiariesScreen = ({ nav }) => {
       <Modal open={modal} onClose={() => setModal(false)} title="Add Beneficiary">
         <Inp label="Full name" value={form.name} onChange={v => setForm(f => ({ ...f, name: v }))} placeholder="Ahmad Musa" />
         <Select label="Bank" value={form.bank} onChange={v => setForm(f => ({ ...f, bank: v }))} options={[
-          { value: "AmaPay", label: "AmaPay" }, { value: "GTBank", label: "GTBank" },
+          { value: "NoorPay", label: "NoorPay" }, { value: "GTBank", label: "GTBank" },
           { value: "Access", label: "Access Bank" }, { value: "Zenith", label: "Zenith Bank" },
           { value: "First Bank", label: "First Bank" }, { value: "UBA", label: "UBA" },
         ]} />
         <Inp label="Account number" value={form.account} onChange={v => setForm(f => ({ ...f, account: v.slice(0, 10) }))} placeholder="10-digit account number" note="Must be exactly 10 digits" />
         <Btn full variant="primary" disabled={!form.name || form.account.length < 10}
-          onClick={() => { setBens(prev => [...prev, { ...form, icon: "👤", fav: false }]); setModal(false); setForm({ name: "", bank: "AmaPay", account: "" }); setToast({ msg: `${form.name} added!`, type: "success" }); }}>
+          onClick={() => { setBens(prev => [...prev, { ...form, icon: "👤", fav: false }]); setModal(false); setForm({ name: "", bank: "NoorPay", account: "" }); setToast({ msg: `${form.name} added!`, type: "success" }); }}>
           Save Beneficiary
         </Btn>
       </Modal>
@@ -2057,7 +2265,7 @@ const Profile = ({ nav }) => {
           <div style={{ width: 60, height: 60, borderRadius: 30, background: "rgba(255,255,255,0.2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28 }}>👤</div>
           <div>
             <div style={{ fontSize: 18, fontWeight: 700, color: C.white }}>Abdurkabir Mardhiyyah</div>
-            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.7)" }}>abdurkabir@amapay.ng</div>
+            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.7)" }}>abdurkabir@noorpay.ng</div>
             <div style={{ marginTop: 4 }}><Badge color="#86efac">✅ Verified</Badge></div>
           </div>
         </div>
@@ -2082,11 +2290,11 @@ const Profile = ({ nav }) => {
             </Card>
           </div>
         ))}
-        <button style={{ width: "100%", padding: "12px", background: C.redL, border: `1px solid ${C.red}30`, borderRadius: 8, color: C.red, fontWeight: 600, fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+        <button style={{ width: "100%", padding: "12px", background: C.redPale, border: `1px solid ${C.red}30`, borderRadius: 8, color: C.red, fontWeight: 600, fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
           🚪 Sign Out
         </button>
         <div style={{ textAlign: "center", fontSize: 10, color: C.textSub, marginTop: 14 }}>
-          AmaPay — Final Year Project 2025/2026<br />
+          NoorPay v1.0 — Final Year Project 2024/2025<br />
           <span style={{ color: C.green }}>Shari'ah-Compliant Digital Finance Platform</span>
         </div>
       </div>
@@ -2099,7 +2307,7 @@ const Transactions = ({ nav }) => {
   const [filter, setFilter] = useState("all");
   const all = [
     { icon: "💰", title: "Salary Credit",      sub: "GTBank Payroll",       amt: "+₦250,000", col: C.green,  cat: "income"   },
-    { icon: "💸", title: "Transfer to Ahmad",   sub: "AmaPay Internal",      amt: "-₦15,000",  col: C.red,    cat: "transfer" },
+    { icon: "💸", title: "Transfer to Ahmad",   sub: "NoorPay Internal",      amt: "-₦15,000",  col: C.red,    cat: "transfer" },
     { icon: "📱", title: "MTN Data — 5GB",      sub: "Bills",                amt: "-₦2,500",   col: C.red,    cat: "bills"    },
     { icon: "⭐", title: "Zakat Payment",        sub: "Islamic Finance",      amt: "-₦8,000",   col: C.amber,  cat: "zakat"    },
     { icon: "💰", title: "Qard Repayment Recv.", sub: "Community Finance",    amt: "+₦10,000",  col: C.green,  cat: "income"   },
@@ -2207,7 +2415,7 @@ const Cards = ({ nav }) => {
         <div style={{ background: frozen ? C.grey500 : `linear-gradient(135deg, ${C.green} 0%, #0F4A28 100%)`, borderRadius: 16, padding: 22, marginBottom: 16, position: "relative", minHeight: 190 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 30 }}>
             <div>
-              <div style={{ fontSize: 10, color: "rgba(255,255,255,0.6)", marginBottom: 2 }}>AmaPay Virtual</div>
+              <div style={{ fontSize: 10, color: "rgba(255,255,255,0.6)", marginBottom: 2 }}>NoorPay Virtual</div>
               <div style={{ fontSize: 14, fontWeight: 700, color: "#D4B483" }}>Naira Card</div>
             </div>
             <div style={{ fontSize: 28 }}>💳</div>
@@ -2273,9 +2481,11 @@ const Cards = ({ nav }) => {
 // MAIN APP SHELL
 // ════════════════════════════════════════════════════════════════
 export default function App() {
-  const [auth, setAuth]   = useState("splash");
+  const [auth, setAuth]   = useState("landing");
   const [page, setPage]   = useState("home");
   const [navAct, setNavAct] = useState("home");
+  const [receiveOpen, setReceiveOpen] = useState(false);
+
 
   const nav = (p) => {
     setPage(p);
@@ -2291,8 +2501,7 @@ export default function App() {
     { key: "me",           icon: "👤", label: "Me"        },
   ];
 
-    const [receiveOpen, setReceiveOpen] = useState(false);
-
+  if (auth === "landing")  return <LandingPage onGetStarted={() => setAuth("splash")} onLogin={() => setAuth("login")} />;
   if (auth === "splash")   return <><GS/><Splash   onDone={() => setAuth("onboard")} /></>;
   if (auth === "onboard")  return <><GS/><Onboard  onDone={() => setAuth("login")} /></>;
   if (auth === "login")    return <><GS/><Login    onLogin={() => setAuth("app")} onReg={() => setAuth("register")} /></>;

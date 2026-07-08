@@ -1,9 +1,14 @@
 /**
- * AmaPay API Service
+ * NoorPay API Service
  * All calls route through Django backend — API key never exposed
  */
 
-const BASE = '/api';  // Vite proxy handles http://127.0.0.1:8000
+// In local dev, Vite's proxy (see vite.config.js) forwards '/api' to your
+// local Django server. In production on Vercel, there's no such proxy, so
+// VITE_API_URL must be set (Vercel → Project → Settings → Environment
+// Variables) to your deployed Render backend, e.g.:
+//   VITE_API_URL=https://noorpay-backend.onrender.com/api
+const BASE = import.meta.env.VITE_API_URL || '/api';
 
 let _access  = null;
 let _refresh = null;
@@ -42,7 +47,7 @@ const request = async (path, options = {}) => {
       }
     } catch {
       clearTokens();
-      window.dispatchEvent(new Event('amapay:logout'));
+      window.dispatchEvent(new Event('noorpay:logout'));
       throw { detail: 'Session expired. Please log in again.' };
     }
   }
