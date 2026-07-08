@@ -1,10 +1,10 @@
 
 {
-  "name": "frontend",
+  "name": "noorpay-frontend",
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "description": "AmaPay — Shari'ah-Compliant Digital Financial Platform",
+  "description": "NoorPay — Shari'ah-Compliant Digital Financial Platform",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
