@@ -10,52 +10,40 @@
 //   VITE_API_URL=https://noorpay-backend.onrender.com/api
 const BASE = import.meta.env.VITE_API_URL || '/api';
 
+import axiosClient from './axiosClient';
+
 let _access  = null;
 let _refresh = null;
 
-export const setTokens  = (access, refresh) => { _access = access; _refresh = refresh; };
-export const clearTokens = () => { _access = null; _refresh = null; };
-export const isLoggedIn  = () => !!_access;
+const getAccessToken = () => _access || localStorage.getItem('np_access');
+const getRefreshToken = () => _refresh || localStorage.getItem('np_refresh');
+
+// Persist tokens to localStorage so Axios interceptors can read them
+export const setTokens  = (access, refresh) => {
+  _access = access; _refresh = refresh;
+  if (access) localStorage.setItem('np_access', access);
+  if (refresh) localStorage.setItem('np_refresh', refresh);
+};
+export const clearTokens = () => {
+  _access = null; _refresh = null;
+  localStorage.removeItem('np_access');
+  localStorage.removeItem('np_refresh');
+};
+export const isLoggedIn  = () => !!getAccessToken();
 
 export const formatNaira = (amount) =>
   `₦${Number(amount).toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 const request = async (path, options = {}) => {
-  const headers = {
-    'Content-Type': 'application/json',
-    ...(_access ? { Authorization: `Bearer ${_access}` } : {}),
-    ...options.headers,
-  };
-  const res = await fetch(`${BASE}${path}`, { ...options, headers });
-
-  // Auto-refresh on 401
-  if (res.status === 401 && _refresh) {
-    try {
-      const r = await fetch(`${BASE}/token/refresh/`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refresh: _refresh }),
-      });
-      const d = await r.json();
-      if (d.access) {
-        _access = d.access;
-        const retry = await fetch(`${BASE}${path}`, {
-          ...options, headers: { ...headers, Authorization: `Bearer ${_access}` },
-        });
-        const retryData = await retry.json();
-        if (!retry.ok) throw retryData;
-        return retryData;
-      }
-    } catch {
-      clearTokens();
-      window.dispatchEvent(new Event('noorpay:logout'));
-      throw { detail: 'Session expired. Please log in again.' };
-    }
+  try {
+    const method = (options.method || 'GET').toLowerCase();
+    const data = options.body ? JSON.parse(options.body) : undefined;
+    const res = await axiosClient.request({ url: path, method, data, headers: options.headers });
+    return res.data;
+  } catch (err) {
+    if (err.response && err.response.data) throw err.response.data;
+    throw { detail: err.message || 'Network error' };
   }
-
-  let data;
-  try { data = await res.json(); } catch { data = {}; }
-  if (!res.ok) throw data;
-  return data;
 };
 
 // ── AUTH ──────────────────────────────────────────────────────────
@@ -63,7 +51,11 @@ export const auth = {
   registerStep1:    (d)  => request('/auth/register/step1/', { method: 'POST', body: JSON.stringify(d) }),
   verifyOTP:        (d)  => request('/auth/register/otp/',   { method: 'POST', body: JSON.stringify(d) }),
   resendOTP:        (email) => request('/auth/register/otp/resend/', { method: 'POST', body: JSON.stringify({ email }) }),
-  completeRegister: (d)  => request('/auth/register/complete/', { method: 'POST', body: JSON.stringify(d) }),
+  completeRegister: async (d)  => {
+    const data = await request('/auth/register/complete/', { method: 'POST', body: JSON.stringify(d) });
+    setTokens(data.access, data.refresh);
+    return data;
+  },
 
   login: async (email, password) => {
     const data = await request('/auth/login/', { method: 'POST', body: JSON.stringify({ email, password }) });
@@ -71,7 +63,7 @@ export const auth = {
     return data;
   },
   logout: async () => {
-    try { await request('/auth/logout/', { method: 'POST', body: JSON.stringify({ refresh: _refresh }) }); }
+    try { await request('/auth/logout/', { method: 'POST', body: JSON.stringify({ refresh: getRefreshToken() }) }); }
     finally { clearTokens(); }
   },
 

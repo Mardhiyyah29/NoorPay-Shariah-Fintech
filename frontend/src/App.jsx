@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { auth, setTokens, clearTokens, isLoggedIn, wallet } from "./api.js";
 
 /*
  * NoorPay - Shari'ah-Compliant Digital Financial Platform
@@ -489,10 +490,16 @@ const Login = ({ onLogin, onReg }) => {
   const [pass, setPass] = useState("");
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
-  const go = () => {
+  const go = async () => {
     if (!email || !pass) { setErr("Please fill in all fields."); return; }
     setLoading(true); setErr("");
-    setTimeout(() => { setLoading(false); onLogin(); }, 1200);
+    try {
+      await onLogin(email, pass);
+    } catch (e) {
+      setErr(e.detail || e.message || "Login failed. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   };
   return (
     <div style={{ minHeight: "100vh", background: C.grey100 }}>
@@ -527,12 +534,97 @@ const Register = ({ onDone, onLogin }) => {
   const [step, setStep] = useState(1);
   const [form, setForm] = useState({ name: "", email: "", phone: "", userType: "student", pass: "", pin: "" });
   const [otp, setOtp] = useState(["", "", "", "", ""]);
-  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
   const refs = useRef([]);
+
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const handleOtp = (i, v) => {
     const a = [...otp]; a[i] = v.slice(-1); setOtp(a);
     if (v && i < 4) refs.current[i + 1]?.focus();
   };
+
+  const nextStep = async () => {
+    setError("");
+    if (step === 1) {
+      if (!form.name || !form.email || !form.phone) {
+        setError("Please complete all registration fields.");
+        return;
+      }
+      setLoading(true);
+      try {
+        await auth.registerStep1({
+          full_name: form.name,
+          email: form.email,
+          phone: form.phone,
+          user_type: form.userType,
+        });
+        setSuccess("OTP sent. Please enter the code we just sent to your phone.");
+        setStep(2);
+      } catch (e) {
+        setError(e.detail || Object.values(e)[0] || "Unable to send OTP. Please try again.");
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
+    if (step === 2) {
+      const code = otp.join("");
+      if (code.length < 5) {
+        setError("Enter the full 5-digit code.");
+        return;
+      }
+      setLoading(true);
+      try {
+        await auth.verifyOTP({ email: form.email, code, purpose: "registration" });
+        setSuccess("Verification successful. Set your password and PIN.");
+        setStep(3);
+      } catch (e) {
+        setError(e.detail || Object.values(e)[0] || "OTP verification failed.");
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
+    if (step === 3) {
+      if (!form.pass || form.pin.length < 4) {
+        setError("Please choose a valid password and 4-digit PIN.");
+        return;
+      }
+      setLoading(true);
+      try {
+        const data = await auth.completeRegister({
+          email: form.email,
+          password: form.pass,
+          pin: form.pin,
+        });
+        setSuccess("Account created successfully.");
+        onDone(data.user);
+      } catch (e) {
+        setError(e.detail || Object.values(e)[0] || "Registration failed. Please try again.");
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+  };
+
+  const resendCode = async () => {
+    setError("");
+    setLoading(true);
+    try {
+      await auth.resendOTP(form.email);
+      setSuccess("OTP resent. Check your phone again.");
+    } catch (e) {
+      setError(e.detail || Object.values(e)[0] || "Unable to resend OTP.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   if (step === 1) return (
     <div style={{ minHeight: "100vh", background: C.grey100 }}>
       <PageHeader title="Create Account" sub="Step 1 of 3 — Personal Information" />
@@ -548,7 +640,9 @@ const Register = ({ onDone, onLogin }) => {
             { value: "family", label: "Family / Individual" },
             { value: "ngo", label: "NGO / Islamic Organization" },
           ]} />
-          <Btn full variant="primary" onClick={() => setStep(2)} disabled={!form.name || !form.email}>Continue →</Btn>
+          {error && <div style={{ fontSize: 12, color: C.red, marginBottom: 10 }}>{error}</div>}
+          {success && <div style={{ fontSize: 12, color: C.green, marginBottom: 10 }}>{success}</div>}
+          <Btn full variant="primary" onClick={nextStep} disabled={loading}>{loading ? "Sending OTP..." : "Continue →"}</Btn>
           <div style={{ textAlign: "center", marginTop: 12 }}>
             <button onClick={onLogin} style={{ background: "none", border: "none", color: C.green, fontSize: 13, cursor: "pointer" }}>Already have an account?</button>
           </div>
@@ -556,6 +650,7 @@ const Register = ({ onDone, onLogin }) => {
       </div>
     </div>
   );
+
   if (step === 2) return (
     <div style={{ minHeight: "100vh", background: C.grey100 }}>
       <PageHeader title="Verify Phone" sub="Step 2 of 3 — OTP Verification" />
@@ -570,12 +665,15 @@ const Register = ({ onDone, onLogin }) => {
                 style={{ width: 48, height: 52, textAlign: "center", fontSize: 20, fontWeight: 700, border: `2px solid ${v ? C.green : C.grey300}`, borderRadius: 8, background: C.white, color: C.green }} />
             ))}
           </div>
-          <Btn full variant="primary" onClick={() => setStep(3)} disabled={otp.join("").length < 5}>Verify Code</Btn>
-          <button style={{ background: "none", border: "none", color: C.green, fontSize: 13, marginTop: 12, cursor: "pointer" }}>Resend code</button>
+          {error && <div style={{ fontSize: 12, color: C.red, marginBottom: 10 }}>{error}</div>}
+          {success && <div style={{ fontSize: 12, color: C.green, marginBottom: 10 }}>{success}</div>}
+          <Btn full variant="primary" onClick={nextStep} disabled={loading || otp.join("").length < 5}>{loading ? "Verifying..." : "Verify Code"}</Btn>
+          <button onClick={resendCode} style={{ background: "none", border: "none", color: C.green, fontSize: 13, marginTop: 12, cursor: "pointer" }}>Resend code</button>
         </Card>
       </div>
     </div>
   );
+
   if (step === 3) return (
     <div style={{ minHeight: "100vh", background: C.grey100 }}>
       <PageHeader title="Secure Account" sub="Step 3 of 3 — Password & PIN" />
@@ -583,14 +681,17 @@ const Register = ({ onDone, onLogin }) => {
         <Card>
           <Inp label="Create password" type="password" value={form.pass} onChange={v => set("pass", v)} placeholder="At least 8 characters" note="Use uppercase, numbers & special characters" />
           <Inp label="Transaction PIN (4 digits)" type="password" value={form.pin} onChange={v => set("pin", v.slice(0, 4))} placeholder="••••" note="You'll use this to authorise all transactions" />
+          {error && <div style={{ fontSize: 12, color: C.red, marginBottom: 10 }}>{error}</div>}
+          {success && <div style={{ fontSize: 12, color: C.green, marginBottom: 10 }}>{success}</div>}
           <div style={{ background: C.greenPale, border: `1px solid ${C.green}30`, borderRadius: 8, padding: 12, marginBottom: 16, fontSize: 12, color: C.grey700 }}>
             ✅ By registering, you confirm this platform operates on <strong>Shari'ah-compliant</strong> principles. No interest (Riba) is charged on any service.
           </div>
-          <Btn full variant="primary" onClick={() => setStep(4)} disabled={!form.pass || form.pin.length < 4}>Create My Account</Btn>
+          <Btn full variant="primary" onClick={nextStep} disabled={loading || !form.pass || form.pin.length < 4}>{loading ? "Creating account..." : "Create My Account"}</Btn>
         </Card>
       </div>
     </div>
   );
+
   return (
     <div style={{ minHeight: "100vh", background: C.grey100, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
       <div style={{ textAlign: "center" }}>
@@ -599,20 +700,33 @@ const Register = ({ onDone, onLogin }) => {
         <div style={{ fontSize: 14, color: C.textSub, marginBottom: 24, lineHeight: 1.6 }}>
           Assalamu alaykum, <strong>{form.name || "friend"}</strong>!<br />Your NoorPay account is ready.
         </div>
-        <Btn full variant="primary" onClick={onDone}>Go to Dashboard →</Btn>
+        <Btn full variant="primary" onClick={() => onDone({ email: form.email, full_name: form.name })}>Go to Dashboard →</Btn>
       </div>
     </div>
   );
 };
 
 // ── Home / Dashboard ──────────────────────────────────────────────
-const Home = ({ nav, user = "Abdurkabir" }) => {
+const Home = ({ nav, user = null }) => {
   const [balVis, setBalVis] = useState(true);
+  const [balance, setBalance] = useState(null);
   const spending = [
     { l: "Jan", v: 42000 }, { l: "Feb", v: 58000 }, { l: "Mar", v: 35000 },
     { l: "Apr", v: 71000 }, { l: "May", v: 48000 }, { l: "Jun", v: 63000, highlight: true },
   ];
   const [homeReceiveOpen, setHomeReceiveOpen] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    wallet.get().then((data) => {
+      if (!active) return;
+      setBalance(data.balance);
+    }).catch(() => {
+      if (!active) return;
+      setBalance(null);
+    });
+    return () => { active = false; };
+  }, []);
   const quickActions = [
     { icon: "💸", label: "Send",       to: "send"         },
     { icon: "📥", label: "Receive",    to: "RECEIVE"      },
@@ -635,7 +749,7 @@ const Home = ({ nav, user = "Abdurkabir" }) => {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", position: "relative" }}>
           <div>
             <div style={{ fontSize: 12, color: "rgba(255,255,255,0.65)", marginBottom: 2 }}>Assalamu alaykum 🌙</div>
-            <div style={{ fontSize: 18, fontWeight: 700, color: C.white }}>{user}</div>
+            <div style={{ fontSize: 18, fontWeight: 700, color: C.white }}>{user?.full_name || "NoorPay User"}</div>
           </div>
           <div style={{ display: "flex", gap: 8 }}>
             <button onClick={() => nav("notifications")} style={{ background: "rgba(255,255,255,0.15)", border: "none", borderRadius: 8, width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, cursor: "pointer", position: "relative" }}>
@@ -654,9 +768,9 @@ const Home = ({ nav, user = "Abdurkabir" }) => {
             <button onClick={() => setBalVis(!balVis)} style={{ background: "none", border: "none", color: C.green, cursor: "pointer", fontSize: 16 }}>{balVis ? "👁" : "🙈"}</button>
           </div>
           <div style={{ fontSize: 28, fontWeight: 800, color: C.text, marginBottom: 2 }}>
-            {balVis ? "₦487,250.00" : "₦ ••••••"}
+            {balVis ? (balance !== null ? `₦${Number(balance).toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "Loading...") : "₦ ••••••"}
           </div>
-          <div style={{ fontSize: 12, color: C.textSub }}>Acct: 0123456789 · <span style={{ color: C.green, fontWeight: 600 }}>✅ Shari'ah-Compliant</span></div>
+          <div style={{ fontSize: 12, color: C.textSub }}>Acct: {user?.account_number || "0123456789"} · <span style={{ color: C.green, fontWeight: 600 }}>✅ Shari'ah-Compliant</span></div>
           <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
             <Btn variant="primary" size="sm" icon="💸" onClick={() => nav("send")} style={{ flex: 1, justifyContent: "center" }}>Send</Btn>
             <Btn variant="outline" size="sm" icon="📥" onClick={() => nav("receive")} style={{ flex: 1, justifyContent: "center" }}>Receive</Btn>
@@ -2233,7 +2347,7 @@ const Reports = ({ nav }) => {
 };
 
 // ── Profile / Me ──────────────────────────────────────────────────
-const Profile = ({ nav }) => {
+const Profile = ({ nav, user }) => {
   const groups = [
     { title: "My Account", items: [
       { icon: "👤", label: "Personal Information",      to: "home"           },
@@ -2264,9 +2378,10 @@ const Profile = ({ nav }) => {
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
           <div style={{ width: 60, height: 60, borderRadius: 30, background: "rgba(255,255,255,0.2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28 }}>👤</div>
           <div>
-            <div style={{ fontSize: 18, fontWeight: 700, color: C.white }}>Abdurkabir Mardhiyyah</div>
-            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.7)" }}>abdurkabir@noorpay.ng</div>
-            <div style={{ marginTop: 4 }}><Badge color="#86efac">✅ Verified</Badge></div>
+            <div style={{ fontSize: 18, fontWeight: 700, color: C.white }}>{user?.full_name || "NoorPay User"}</div>
+            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.7)", marginBottom: 4 }}>{user?.email || "Loading..."}</div>
+            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.7)", marginBottom: 4 }}>Account: {user?.account_number || "Not assigned"}</div>
+            <div style={{ marginTop: 4 }}><Badge color="#86efac">{user?.is_verified ? "✅ Verified" : "Awaiting verification"}</Badge></div>
           </div>
         </div>
       </div>
@@ -2290,7 +2405,7 @@ const Profile = ({ nav }) => {
             </Card>
           </div>
         ))}
-        <button style={{ width: "100%", padding: "12px", background: C.redPale, border: `1px solid ${C.red}30`, borderRadius: 8, color: C.red, fontWeight: 600, fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+        <button onClick={onLogout} style={{ width: "100%", padding: "12px", background: C.redPale, border: `1px solid ${C.red}30`, borderRadius: 8, color: C.red, fontWeight: 600, fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
           🚪 Sign Out
         </button>
         <div style={{ textAlign: "center", fontSize: 10, color: C.textSub, marginTop: 14 }}>
@@ -2485,7 +2600,56 @@ export default function App() {
   const [page, setPage]   = useState("home");
   const [navAct, setNavAct] = useState("home");
   const [receiveOpen, setReceiveOpen] = useState(false);
+  const [user, setUser]           = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
 
+  useEffect(() => {
+    if (!isLoggedIn()) {
+      setAuthLoading(false);
+      return;
+    }
+    auth.getProfile()
+      .then((profile) => {
+        setUser(profile);
+        setAuth("app");
+      })
+      .catch(() => {
+        clearTokens();
+        setAuth("landing");
+      })
+      .finally(() => setAuthLoading(false));
+  }, []);
+
+  useEffect(() => {
+    const handleSessionExpired = () => {
+      clearTokens();
+      setUser(null);
+      setAuth("login");
+    };
+    window.addEventListener('noorpay:logout', handleSessionExpired);
+    return () => window.removeEventListener('noorpay:logout', handleSessionExpired);
+  }, []);
+
+  const handleLogin = async (email, password) => {
+    const data = await auth.login(email, password);
+    setTokens(data.access, data.refresh);
+    setUser(data.user);
+    setAuth("app");
+  };
+
+  const handleLogout = async () => {
+    try { await auth.logout(); } catch (err) { /* ignore */ }
+    clearTokens();
+    setUser(null);
+    setPage("home");
+    setNavAct("home");
+    setAuth("login");
+  };
+
+  const handleRegisterSuccess = (profile) => {
+    setUser(profile);
+    setAuth("app");
+  };
 
   const nav = (p) => {
     setPage(p);
@@ -2501,11 +2665,13 @@ export default function App() {
     { key: "me",           icon: "👤", label: "Me"        },
   ];
 
+  if (authLoading) return <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, color: C.text }}>Loading NoorPay...</div>;
+  if (authLoading) return <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, color: C.text }}>Loading NoorPay...</div>;
   if (auth === "landing")  return <LandingPage onGetStarted={() => setAuth("splash")} onLogin={() => setAuth("login")} />;
   if (auth === "splash")   return <><GS/><Splash   onDone={() => setAuth("onboard")} /></>;
   if (auth === "onboard")  return <><GS/><Onboard  onDone={() => setAuth("login")} /></>;
-  if (auth === "login")    return <><GS/><Login    onLogin={() => setAuth("app")} onReg={() => setAuth("register")} /></>;
-  if (auth === "register") return <><GS/><Register onDone={() => setAuth("app")} onLogin={() => setAuth("login")} /></>;
+  if (auth === "login")    return <><GS/><Login    onLogin={handleLogin} onReg={() => setAuth("register")} /></>;
+  if (auth === "register") return <><GS/><Register onDone={handleRegisterSuccess} onLogin={() => setAuth("login")} /></>;
 
   // Full-screen pages (no bottom nav)
   // const [receiveOpen, setReceiveOpen] = useState(false);
@@ -2528,7 +2694,7 @@ export default function App() {
     <div style={{ maxWidth: 430, margin: "0 auto", minHeight: "100vh", background: C.grey100, fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" }}>
       <GS />
       <div style={{ height: "100vh", overflowY: "auto", paddingBottom: 68 }}>
-        <Page nav={nav} />
+        <Page nav={nav} user={user} onLogout={handleLogout} />
       </div>
       <ReceiveModal open={receiveOpen} onClose={() => setReceiveOpen(false)} />
 
