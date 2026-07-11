@@ -1,5 +1,19 @@
 import { useState, useEffect, useRef } from "react";
-import { auth, setTokens, clearTokens, isLoggedIn, wallet } from "./api.js";
+import {
+  auth,
+  setTokens,
+  clearTokens,
+  isLoggedIn,
+  wallet,
+  budgets,
+  transactions as txApi,
+  formatNaira,
+  savings,
+  scholarship as scholarshipApi,
+  studentFinance,
+  notifications as notifApi,
+  reports,
+} from "./api.js";
 
 /*
  * NoorPay - Shari'ah-Compliant Digital Financial Platform
@@ -16,11 +30,11 @@ import { auth, setTokens, clearTokens, isLoggedIn, wallet } from "./api.js";
 
 // ── Color tokens ──────────────────────────────────────────────────
 const C = {
-  green:    "#0F5132",  // Deeper, richer Islamic green (primary)
-  greenL:   "#1B8A4C",  // Vivid mid green
-  greenXL:  "#34D399",  // Bright accent green (highlights, success glows)
+  green:    "#01140c",  // Deeper, richer Islamic green (primary)
+  greenL:   "#19683b",  // Vivid mid green
+  greenXL:  "#01180f",  // Bright accent green (highlights, success glows)
   greenPale:"#E8F5EE",  // Very light green bg
-  greenDeep:"#0A3D26",  // Near-black green for gradient depth
+  greenDeep:"#01130b",  // Near-black green for gradient depth
   amber:    "#B8860B",  // Rich gold (primary accent)
   amberL:   "#F0B429",  // Bright gold highlight
   amberXL:  "#FFD666",  // Shiny gold shimmer
@@ -375,7 +389,6 @@ const LandingPage = ({ onGetStarted, onLogin }) => {
             <Badge color={C.blue}>✅ Fee-Free Transfers</Badge>
           </div>
         </div>
-
         {/* Phone mockup */}
         <div className="np-land-phone">
           <div style={{ backgroundImage: C.gradGreen, borderRadius: 28, padding: 20, boxShadow: C.glowGreen }}>
@@ -496,7 +509,7 @@ const Login = ({ onLogin, onReg }) => {
     try {
       await onLogin(email, pass);
     } catch (e) {
-      setErr(e.detail || e.message || "Login failed. Please try again.");
+      setErr(e.detail || Object.values(e)[0] || "Unable to sign in.");
     } finally {
       setLoading(false);
     }
@@ -505,7 +518,10 @@ const Login = ({ onLogin, onReg }) => {
     <div style={{ minHeight: "100vh", background: C.grey100 }}>
       <div style={{ background: C.green, padding: "56px 24px 32px", textAlign: "center" }}>
         <div style={{ fontSize: 28, marginBottom: 8 }}>🕌</div>
-        <div style={{ fontSize: 26, fontWeight: 800, color: C.white, letterSpacing: -0.5 }}>NoorPay</div>
+        {/* <div style={{ fontSize: 26, fontWeight: 800, color: "red" }}>
+  TEST APP
+</div> */}
+         <div style={{ fontSize: 26, fontWeight: 800, color: C.white, letterSpacing: -0.5 }}>NoorPay</div> 
         <div style={{ fontSize: 13, color: "rgba(255,255,255,0.7)", marginTop: 4 }}>Halal Finance · For Everyone</div>
       </div>
       <div style={{ padding: 20 }}>
@@ -537,92 +553,60 @@ const Register = ({ onDone, onLogin }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
-  const refs = useRef([]);
-
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const refs = useRef([]);
   const handleOtp = (i, v) => {
     const a = [...otp]; a[i] = v.slice(-1); setOtp(a);
     if (v && i < 4) refs.current[i + 1]?.focus();
   };
 
-  const nextStep = async () => {
-    setError("");
-    if (step === 1) {
-      if (!form.name || !form.email || !form.phone) {
-        setError("Please complete all registration fields.");
-        return;
-      }
-      setLoading(true);
-      try {
-        await auth.registerStep1({
-          full_name: form.name,
-          email: form.email,
-          phone: form.phone,
-          user_type: form.userType,
-        });
-        setSuccess("OTP sent. Please enter the code we just sent to your phone.");
-        setStep(2);
-      } catch (e) {
-        setError(e.detail || Object.values(e)[0] || "Unable to send OTP. Please try again.");
-      } finally {
-        setLoading(false);
-      }
+  const submitStep1 = async () => {
+    setError(""); setSuccess("");
+    if (!form.name || !form.email || !form.phone) {
+      setError("Please complete the details first.");
       return;
     }
+    setLoading(true);
+    try {
+      await auth.registerStep1({ full_name: form.name, email: form.email, phone: form.phone, user_type: form.userType });
+      setSuccess("OTP sent. Enter the code below.");
+      setStep(2);
+    } catch (e) {
+      setError(e.detail || Object.values(e)[0] || "Unable to send OTP.");
+    } finally { setLoading(false); }
+  };
 
-    if (step === 2) {
-      const code = otp.join("");
-      if (code.length < 5) {
-        setError("Enter the full 5-digit code.");
-        return;
-      }
-      setLoading(true);
-      try {
-        await auth.verifyOTP({ email: form.email, code, purpose: "registration" });
-        setSuccess("Verification successful. Set your password and PIN.");
-        setStep(3);
-      } catch (e) {
-        setError(e.detail || Object.values(e)[0] || "OTP verification failed.");
-      } finally {
-        setLoading(false);
-      }
-      return;
-    }
+  const submitStep2 = async () => {
+    const code = otp.join("");
+    setError(""); setSuccess("");
+    if (code.length < 5) { setError("Enter the full 5-digit code."); return; }
+    setLoading(true);
+    try {
+      await auth.verifyOTP({ email: form.email, code, purpose: "registration" });
+      setSuccess("Verification succeeded. Set your password and PIN.");
+      setStep(3);
+    } catch (e) {
+      setError(e.detail || Object.values(e)[0] || "Invalid OTP.");
+    } finally { setLoading(false); }
+  };
 
-    if (step === 3) {
-      if (!form.pass || form.pin.length < 4) {
-        setError("Please choose a valid password and 4-digit PIN.");
-        return;
-      }
-      setLoading(true);
-      try {
-        const data = await auth.completeRegister({
-          email: form.email,
-          password: form.pass,
-          pin: form.pin,
-        });
-        setSuccess("Account created successfully.");
-        onDone(data.user);
-      } catch (e) {
-        setError(e.detail || Object.values(e)[0] || "Registration failed. Please try again.");
-      } finally {
-        setLoading(false);
-      }
-      return;
-    }
+  const submitStep3 = async () => {
+    setError(""); setSuccess("");
+    if (!form.pass || form.pin.length < 4) { setError("Choose a password and a 4-digit PIN."); return; }
+    setLoading(true);
+    try {
+      const data = await auth.completeRegister({ email: form.email, password: form.pass, pin: form.pin });
+      onDone(data.user);
+    } catch (e) {
+      setError(e.detail || Object.values(e)[0] || "Registration failed.");
+    } finally { setLoading(false); }
   };
 
   const resendCode = async () => {
-    setError("");
+    setError(""); setSuccess("");
     setLoading(true);
-    try {
-      await auth.resendOTP(form.email);
-      setSuccess("OTP resent. Check your phone again.");
-    } catch (e) {
-      setError(e.detail || Object.values(e)[0] || "Unable to resend OTP.");
-    } finally {
-      setLoading(false);
-    }
+    try { await auth.resendOTP(form.email); setSuccess("OTP resent."); } catch (e) { setError(e.detail || Object.values(e)[0] || "Could not resend."); }
+    finally { setLoading(false); }
   };
 
   if (step === 1) return (
@@ -642,7 +626,7 @@ const Register = ({ onDone, onLogin }) => {
           ]} />
           {error && <div style={{ fontSize: 12, color: C.red, marginBottom: 10 }}>{error}</div>}
           {success && <div style={{ fontSize: 12, color: C.green, marginBottom: 10 }}>{success}</div>}
-          <Btn full variant="primary" onClick={nextStep} disabled={loading}>{loading ? "Sending OTP..." : "Continue →"}</Btn>
+          <Btn full variant="primary" onClick={submitStep1} disabled={loading}>{loading ? "Sending OTP..." : "Continue →"}</Btn>
           <div style={{ textAlign: "center", marginTop: 12 }}>
             <button onClick={onLogin} style={{ background: "none", border: "none", color: C.green, fontSize: 13, cursor: "pointer" }}>Already have an account?</button>
           </div>
@@ -650,7 +634,6 @@ const Register = ({ onDone, onLogin }) => {
       </div>
     </div>
   );
-
   if (step === 2) return (
     <div style={{ minHeight: "100vh", background: C.grey100 }}>
       <PageHeader title="Verify Phone" sub="Step 2 of 3 — OTP Verification" />
@@ -667,13 +650,12 @@ const Register = ({ onDone, onLogin }) => {
           </div>
           {error && <div style={{ fontSize: 12, color: C.red, marginBottom: 10 }}>{error}</div>}
           {success && <div style={{ fontSize: 12, color: C.green, marginBottom: 10 }}>{success}</div>}
-          <Btn full variant="primary" onClick={nextStep} disabled={loading || otp.join("").length < 5}>{loading ? "Verifying..." : "Verify Code"}</Btn>
+          <Btn full variant="primary" onClick={submitStep2} disabled={loading || otp.join("").length < 5}>{loading ? "Verifying..." : "Verify Code"}</Btn>
           <button onClick={resendCode} style={{ background: "none", border: "none", color: C.green, fontSize: 13, marginTop: 12, cursor: "pointer" }}>Resend code</button>
         </Card>
       </div>
     </div>
   );
-
   if (step === 3) return (
     <div style={{ minHeight: "100vh", background: C.grey100 }}>
       <PageHeader title="Secure Account" sub="Step 3 of 3 — Password & PIN" />
@@ -686,12 +668,11 @@ const Register = ({ onDone, onLogin }) => {
           <div style={{ background: C.greenPale, border: `1px solid ${C.green}30`, borderRadius: 8, padding: 12, marginBottom: 16, fontSize: 12, color: C.grey700 }}>
             ✅ By registering, you confirm this platform operates on <strong>Shari'ah-compliant</strong> principles. No interest (Riba) is charged on any service.
           </div>
-          <Btn full variant="primary" onClick={nextStep} disabled={loading || !form.pass || form.pin.length < 4}>{loading ? "Creating account..." : "Create My Account"}</Btn>
+          <Btn full variant="primary" onClick={submitStep3} disabled={loading || !form.pass || form.pin.length < 4}>{loading ? "Creating account..." : "Create My Account"}</Btn>
         </Card>
       </div>
     </div>
   );
-
   return (
     <div style={{ minHeight: "100vh", background: C.grey100, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
       <div style={{ textAlign: "center" }}>
@@ -700,7 +681,7 @@ const Register = ({ onDone, onLogin }) => {
         <div style={{ fontSize: 14, color: C.textSub, marginBottom: 24, lineHeight: 1.6 }}>
           Assalamu alaykum, <strong>{form.name || "friend"}</strong>!<br />Your NoorPay account is ready.
         </div>
-        <Btn full variant="primary" onClick={() => onDone({ email: form.email, full_name: form.name })}>Go to Dashboard →</Btn>
+        <Btn full variant="primary" onClick={onDone}>Go to Dashboard →</Btn>
       </div>
     </div>
   );
@@ -710,21 +691,18 @@ const Register = ({ onDone, onLogin }) => {
 const Home = ({ nav, user = null }) => {
   const [balVis, setBalVis] = useState(true);
   const [balance, setBalance] = useState(null);
+  const [recentTxns, setRecentTxns] = useState([]);
   const spending = [
     { l: "Jan", v: 42000 }, { l: "Feb", v: 58000 }, { l: "Mar", v: 35000 },
     { l: "Apr", v: 71000 }, { l: "May", v: 48000 }, { l: "Jun", v: 63000, highlight: true },
   ];
   const [homeReceiveOpen, setHomeReceiveOpen] = useState(false);
-
   useEffect(() => {
     let active = true;
-    wallet.get().then((data) => {
-      if (!active) return;
-      setBalance(data.balance);
-    }).catch(() => {
-      if (!active) return;
-      setBalance(null);
-    });
+    wallet.get().then((data) => { if (active) setBalance(data.balance); }).catch(() => { if (active) setBalance(null); });
+    txApi.getAll().then((data) => {
+      if (active) setRecentTxns(Array.isArray(data) ? data.slice(0, 5) : []);
+    }).catch(() => { if (active) setRecentTxns([]); });
     return () => { active = false; };
   }, []);
   const quickActions = [
@@ -826,13 +804,16 @@ const Home = ({ nav, user = null }) => {
           <div style={{ padding: "12px 14px" }}>
             <SectionHeader title="Recent Transactions" action="View all" onAction={() => nav("transactions")} />
           </div>
-          {[
-            { icon: "💰", title: "Salary Credit",      sub: "GTBank Payroll",    amt: "+₦250,000", col: C.green  },
-            { icon: "💸", title: "Transfer to Ahmad",  sub: "NoorPay Transfer",   amt: "-₦15,000",  col: C.red    },
-            { icon: "📱", title: "MTN Data — 5GB",     sub: "Bills & Airtime",   amt: "-₦2,500",   col: C.red    },
-            { icon: "⭐", title: "Zakat Payment",       sub: "Islamic Finance",   amt: "-₦8,000",   col: C.amber  },
-            { icon: "💰", title: "Qard Repayment",      sub: "Community Finance", amt: "+₦10,000",  col: C.green  },
-          ].map((tx, i) => <ListItem key={i} icon={tx.icon} title={tx.title} sub={tx.sub} right={tx.amt} rightColor={tx.col} />)}
+          {recentTxns.length === 0 ? (
+            <div style={{ padding: "0 14px 14px", fontSize: 12, color: C.textSub }}>No recent transactions yet.</div>
+          ) : recentTxns.map((tx, i) => {
+            const isIncoming = tx.type === "credit" || tx.type === "income";
+            const icon = tx.type === "transfer" ? "💸" : tx.type === "airtime" ? "📱" : tx.type === "data" ? "📦" : tx.type === "zakat" ? "⭐" : tx.type === "qard" ? "🤝" : "💰";
+            const title = tx.description || "Transaction";
+            const sub = tx.recipient_name || tx.bank_name || new Date(tx.created_at).toLocaleDateString("en-NG", { month: "short", day: "numeric" });
+            const amt = `${isIncoming ? "+" : "-"}${formatNaira(tx.amount)}`;
+            return <ListItem key={tx.id || i} icon={icon} title={title} sub={sub} right={amt} rightColor={isIncoming ? C.green : C.red} />;
+          })}
         </Card>
       </div>
       <ReceiveModal open={homeReceiveOpen} onClose={() => setHomeReceiveOpen(false)} />
@@ -843,24 +824,64 @@ const Home = ({ nav, user = null }) => {
 // ── Finance / Budget page ─────────────────────────────────────────
 const Finance = ({ nav }) => {
   const [tab, setTab] = useState("budget");
-  const expenses = [
-    { label: "Food & Dining", v: 28000, c: C.amber },
-    { label: "Transport",     v: 15000, c: C.blue  },
-    { label: "Housing/Rent",  v: 50000, c: C.green },
-    { label: "Utilities",     v: 8000,  c: C.purple},
-    { label: "Education",     v: 12000, c: C.red   },
-  ];
-  const budgets = [
-    { name: "Food & Dining",  budgeted: 35000, spent: 28000, c: C.amber  },
-    { name: "Transport",      budgeted: 20000, spent: 15000, c: C.blue   },
-    { name: "Housing",        budgeted: 50000, spent: 50000, c: C.green  },
-    { name: "Entertainment",  budgeted: 10000, spent: 13500, c: C.red    },
-    { name: "Education",      budgeted: 15000, spent: 12000, c: C.purple },
-  ];
+  const [summary, setSummary] = useState(null);
+  const [budgetRows, setBudgetRows] = useState([]);
+  const [savingsSummary, setSavingsSummary] = useState(null);
+  const [savingsGoals, setSavingsGoals] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const month = new Date().getMonth() + 1;
+    const year = new Date().getFullYear();
+    Promise.all([
+      budgets.getSummary(month, year),
+      budgets.getAll(month, year),
+      savings.getSummary(),
+      savings.getAll(),
+    ])
+      .then(([summaryData, rows, savingsData, goals]) => {
+        setSummary(summaryData);
+        setBudgetRows(Array.isArray(rows) ? rows : []);
+        setSavingsSummary(savingsData || null);
+        setSavingsGoals(Array.isArray(goals) ? goals : []);
+      })
+      .catch(() => {
+        setSummary(null);
+        setBudgetRows([]);
+        setSavingsSummary(null);
+        setSavingsGoals([]);
+      })
+      .finally(() => setLoading(false));
+  }, []);
+
+  const colorFor = (category = "") => {
+    const c = category.toLowerCase();
+    if (c.includes("food") || c.includes("dining")) return C.amber;
+    if (c.includes("transport")) return C.blue;
+    if (c.includes("housing") || c.includes("rent")) return C.green;
+    if (c.includes("education")) return C.purple;
+    if (c.includes("health") || c.includes("utility")) return C.red;
+    return C.grey500;
+  };
+
+  const expenses = budgetRows.map((b) => ({ label: b.category || "Other", v: Number(b.spent || 0), c: colorFor(b.category) }));
+  const budgetsData = budgetRows.map((b) => ({ name: b.category || "Other", budgeted: Number(b.monthly_limit || 0), spent: Number(b.spent || 0), c: colorFor(b.category) }));
+  const goalTypeLabel = (type = "") => ({
+    hajj: "Hajj Target",
+    emergency: "Emergency",
+    education: "Education",
+    laptop: "Personal",
+    business: "Business",
+    marriage: "Marriage",
+    house: "Housing",
+    car: "Vehicle",
+    custom: "Custom Goal",
+  }[type] || "Goal");
+  const goalIcon = (type = "") => ({ hajj: "🕋", emergency: "🛡️", education: "🎓", laptop: "💻", business: "💼", marriage: "💍", house: "🏠", car: "🚗", custom: "🎯" }[type] || "🎯");
+
   return (
     <div style={{ paddingBottom: 80 }}>
       <PageHeader title="Finance Hub" sub="Budget · Expenses · Islamic Finance" />
-      {/* Tab bar */}
       <div style={{ background: C.white, display: "flex", borderBottom: `1px solid ${C.grey200}` }}>
         {[["budget", "Budget"], ["savings", "Savings"], ["islamic", "Islamic"]].map(([k, l]) => (
           <button key={k} onClick={() => setTab(k)} style={{
@@ -874,38 +895,44 @@ const Finance = ({ nav }) => {
       <div style={{ padding: 16 }}>
         {tab === "budget" && <>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 14 }}>
-            <Stat label="Income"  value="₦350k" color={C.green} />
-            <Stat label="Spent"   value="₦113k" color={C.red}   />
-            <Stat label="Balance" value="₦237k" color={C.blue}  />
+            <Stat label="Income"  value={loading ? "..." : formatNaira(summary?.total_income || 0)} color={C.green} />
+            <Stat label="Spent"   value={loading ? "..." : formatNaira(summary?.total_spent || 0)} color={C.red}   />
+            <Stat label="Balance" value={loading ? "..." : formatNaira(summary?.net_savings || 0)} color={C.blue}  />
           </div>
           <Card style={{ marginBottom: 14 }}>
             <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 12 }}>Expense Breakdown</div>
-            <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-              <Donut slices={expenses.map(e => ({ v: e.v, c: e.c }))} />
-              <div style={{ flex: 1 }}>
-                {expenses.map((e, i) => (
-                  <div key={i} style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      <div style={{ width: 8, height: 8, borderRadius: 2, background: e.c }} />
-                      <span style={{ fontSize: 11, color: C.text }}>{e.label}</span>
+            {expenses.length === 0 ? (
+              <div style={{ fontSize: 12, color: C.textSub }}>No category spending data yet.</div>
+            ) : (
+              <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+                <Donut slices={expenses.map(e => ({ v: e.v, c: e.c }))} />
+                <div style={{ flex: 1 }}>
+                  {expenses.map((e, i) => (
+                    <div key={i} style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <div style={{ width: 8, height: 8, borderRadius: 2, background: e.c }} />
+                        <span style={{ fontSize: 11, color: C.text }}>{e.label}</span>
+                      </div>
+                      <span style={{ fontSize: 11, fontWeight: 600 }}>{formatNaira(e.v)}</span>
                     </div>
-                    <span style={{ fontSize: 11, fontWeight: 600 }}>₦{e.v.toLocaleString()}</span>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
           </Card>
           <Card>
             <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 12 }}>Budget Performance</div>
-            {budgets.map((b, i) => {
-              const pct = Math.round((b.spent / b.budgeted) * 100);
+            {budgetsData.length === 0 ? (
+              <div style={{ fontSize: 12, color: C.textSub }}>No budgets created yet.</div>
+            ) : budgetsData.map((b, i) => {
+              const pct = b.budgeted ? Math.round((b.spent / b.budgeted) * 100) : 0;
               return (
                 <div key={i} style={{ marginBottom: 12 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
                     <span style={{ fontSize: 13, color: C.text }}>{b.name}</span>
                     <div>
-                      <span style={{ fontSize: 12, fontWeight: 600, color: b.spent > b.budgeted ? C.red : C.text }}>₦{b.spent.toLocaleString()}</span>
-                      <span style={{ fontSize: 11, color: C.textSub }}> / ₦{b.budgeted.toLocaleString()}</span>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: b.spent > b.budgeted ? C.red : C.text }}>{formatNaira(b.spent)}</span>
+                      <span style={{ fontSize: 11, color: C.textSub }}> / {formatNaira(b.budgeted)}</span>
                       {b.spent > b.budgeted && <Badge color={C.red} style={{ marginLeft: 4 }}>Over</Badge>}
                     </div>
                   </div>
@@ -920,32 +947,32 @@ const Finance = ({ nav }) => {
         {tab === "savings" && <>
           <Card style={{ marginBottom: 14, background: C.greenPale, border: `1px solid ${C.green}40` }}>
             <div style={{ fontSize: 12, color: C.textSub, marginBottom: 2 }}>Total Savings</div>
-            <div style={{ fontSize: 26, fontWeight: 800, color: C.green }}>₦1,202,000</div>
-            <div style={{ fontSize: 12, color: C.textSub, marginTop: 2 }}>Across 3 goals · ₦45,000 auto-saved this month</div>
+            <div style={{ fontSize: 26, fontWeight: 800, color: C.green }}>{loading ? "..." : formatNaira(savingsSummary?.total_saved || 0)}</div>
+            <div style={{ fontSize: 12, color: C.textSub, marginTop: 2 }}>{loading ? "Loading" : `Across ${savingsGoals.length} goals`}</div>
           </Card>
-          {[
-            { name: "Hajj Savings",    target: 1200000, saved: 380000,  type: "Hajj Target",  deadline: "Jan 2027", icon: "🕋", c: C.green },
-            { name: "Tuition Fees",    target: 200000,  saved: 85000,   type: "Education",    deadline: "Sep 2025", icon: "🎓", c: C.blue  },
-            { name: "Emergency Fund",  target: 500000,  saved: 212000,  type: "Emergency",    deadline: "Dec 2025", icon: "🛡️", c: C.amber },
-            { name: "Laptop Purchase", target: 350000,  saved: 120000,  type: "Personal",     deadline: "Mar 2026", icon: "💻", c: C.purple},
-          ].map((g, i) => {
-            const pct = Math.round((g.saved / g.target) * 100);
+          {loading ? (
+            <div style={{ fontSize: 13, color: C.textSub, padding: 8 }}>Loading your savings goals…</div>
+          ) : savingsGoals.length === 0 ? (
+            <div style={{ fontSize: 13, color: C.textSub, padding: 8 }}>No savings goals yet. Start one to build good habits.</div>
+          ) : savingsGoals.map((g, i) => {
+            const pct = Math.round((Number(g.saved_amount || 0) / Math.max(Number(g.target_amount || 0), 1)) * 100);
+            const color = i % 2 === 0 ? C.green : i % 3 === 1 ? C.blue : C.amber;
             return (
-              <Card key={i} style={{ marginBottom: 10 }}>
+              <Card key={g.id || i} style={{ marginBottom: 10 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
                   <div>
-                    <div style={{ fontWeight: 600, fontSize: 14 }}>{g.icon} {g.name}</div>
-                    <Badge color={g.c}>{g.type}</Badge>
+                    <div style={{ fontWeight: 600, fontSize: 14 }}>{goalIcon(g.goal_type)} {g.title}</div>
+                    <Badge color={color}>{goalTypeLabel(g.goal_type)}</Badge>
                   </div>
                   <div style={{ textAlign: "right" }}>
-                    <div style={{ fontWeight: 700, fontSize: 15, color: g.c }}>₦{g.saved.toLocaleString()}</div>
-                    <div style={{ fontSize: 11, color: C.textSub }}>of ₦{g.target.toLocaleString()}</div>
+                    <div style={{ fontWeight: 700, fontSize: 15, color }}>{formatNaira(g.saved_amount || 0)}</div>
+                    <div style={{ fontSize: 11, color: C.textSub }}>of {formatNaira(g.target_amount || 0)}</div>
                   </div>
                 </div>
-                <Progress pct={pct} color={g.c} h={10} />
+                <Progress pct={pct} color={color} h={10} />
                 <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6 }}>
-                  <span style={{ fontSize: 11, color: C.textSub }}>Due: {g.deadline}</span>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: g.c }}>{pct}% done</span>
+                  <span style={{ fontSize: 11, color: C.textSub }}>{g.deadline ? `Due: ${new Date(g.deadline).toLocaleDateString("en-NG", { month: "short", day: "numeric", year: "numeric" })}` : "No deadline"}</span>
+                  <span style={{ fontSize: 11, fontWeight: 700, color }}>{pct}% done</span>
                 </div>
               </Card>
             );
@@ -1117,19 +1144,58 @@ const QardHasan = ({ nav }) => {
 const Scholarship = ({ nav }) => {
   const [modal, setModal] = useState(false);
   const [toast, setToast] = useState(null);
-  const scholarships = [
-    { name: "Federal Government Scholarship", amount: "₦150,000/yr",   deadline: "30 Aug 2025", status: "Applied",    progress: 60, icon: "🇳🇬" },
-    { name: "MTN Foundation Scholarship",      amount: "₦120,000/yr",   deadline: "15 Sep 2025", status: "In Review",  progress: 80, icon: "📡" },
-    { name: "Islamic Development Bank Grant",  amount: "USD 5,000",     deadline: "01 Oct 2025", status: "Not Applied", progress: 0, icon: "🕌" },
-    { name: "Dangote Foundation Education",    amount: "₦200,000",      deadline: "20 Jul 2025", status: "Not Applied", progress: 0, icon: "🏆" },
-  ];
-  const statusColor = { "Applied": C.blue, "In Review": C.amber, "Not Applied": C.grey500, "Awarded": C.green };
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [form, setForm] = useState({ name: "", organization: "", amount: "", deadline: "", status: "not_applied", progress: "0", notes: "", link: "" });
+
+  const resetForm = () => setForm({ name: "", organization: "", amount: "", deadline: "", status: "not_applied", progress: "0", notes: "", link: "" });
+  const loadScholarships = () => {
+    setLoading(true);
+    scholarshipApi.getAll()
+      .then((data) => setRows(Array.isArray(data) ? data : []))
+      .catch(() => setRows([]))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    loadScholarships();
+  }, []);
+
+  const statusColor = { applied: C.blue, in_review: C.amber, not_applied: C.grey500, awarded: C.green, rejected: C.red };
+  const statusLabel = (value = "") => ({ applied: "Applied", in_review: "In Review", not_applied: "Not Applied", awarded: "Awarded", rejected: "Rejected" }[value] || value);
+
+  const handleCreate = async () => {
+    if (!form.name.trim()) {
+      setToast({ msg: "Please enter a scholarship name.", type: "error" });
+      return;
+    }
+    try {
+      const payload = {
+        name: form.name,
+        organization: form.organization,
+        amount: form.amount,
+        deadline: form.deadline || null,
+        status: form.status,
+        progress: Number(form.progress || 0),
+        notes: form.notes,
+        link: form.link,
+      };
+      const created = await scholarshipApi.create(payload);
+      setRows((prev) => [created, ...prev]);
+      setModal(false);
+      resetForm();
+      setToast({ msg: "Scholarship added to tracker.", type: "success" });
+    } catch (e) {
+      setToast({ msg: e?.detail || "Unable to save scholarship.", type: "error" });
+    }
+  };
+
   return (
     <div style={{ paddingBottom: 80 }}>
       {toast && <Toast msg={toast.msg} type={toast.type} onDone={() => setToast(null)} />}
       <PageHeader title="Scholarship & Grants" sub="Track your applications & deadlines" onBack={() => nav("home")}>
         <div style={{ display: "flex", gap: 10, marginTop: 12 }}>
-          {[{ l: "4", sub: "Tracked" }, { l: "2", sub: "Applied" }, { l: "₦270k", sub: "Potential" }].map((s, i) => (
+          {[{ l: String(rows.length), sub: "Tracked" }, { l: String(rows.filter((s) => s.status === "applied").length), sub: "Applied" }, { l: "Live", sub: "Backend sync" }].map((s, i) => (
             <div key={i} style={{ background: "rgba(255,255,255,0.15)", borderRadius: 8, padding: "8px 14px" }}>
               <div style={{ fontSize: 16, fontWeight: 800, color: C.white }}>{s.l}</div>
               <div style={{ fontSize: 10, color: "rgba(255,255,255,0.7)" }}>{s.sub}</div>
@@ -1142,31 +1208,35 @@ const Scholarship = ({ nav }) => {
           <div style={{ fontWeight: 700, fontSize: 15 }}>My Scholarships</div>
           <Btn variant="primary" size="sm" icon="+" onClick={() => setModal(true)}>Add New</Btn>
         </div>
-        {scholarships.map((s, i) => (
-          <Card key={i} style={{ marginBottom: 10 }}>
+        {loading ? (
+          <div style={{ fontSize: 13, color: C.textSub, padding: 8 }}>Loading scholarships…</div>
+        ) : rows.length === 0 ? (
+          <div style={{ fontSize: 13, color: C.textSub, padding: 8 }}>No scholarship entries yet.</div>
+        ) : rows.map((s, i) => (
+          <Card key={s.id || i} style={{ marginBottom: 10 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
               <div style={{ display: "flex", gap: 10 }}>
-                <span style={{ fontSize: 24 }}>{s.icon}</span>
+                <span style={{ fontSize: 24 }}>{s.organization ? "🎓" : "📄"}</span>
                 <div>
                   <div style={{ fontWeight: 600, fontSize: 13 }}>{s.name}</div>
-                  <div style={{ fontSize: 12, color: C.textSub }}>{s.amount}</div>
+                  <div style={{ fontSize: 12, color: C.textSub }}>{s.organization || "No organization added"}</div>
                 </div>
               </div>
-              <Badge color={statusColor[s.status]}>{s.status}</Badge>
+              <Badge color={statusColor[s.status] || C.grey500}>{statusLabel(s.status)}</Badge>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-              <span style={{ fontSize: 11, color: C.red, fontWeight: 600 }}>📅 Deadline: {s.deadline}</span>
+              <span style={{ fontSize: 11, color: C.red, fontWeight: 600 }}>📅 {s.deadline ? new Date(s.deadline).toLocaleDateString("en-NG", { month: "short", day: "numeric", year: "numeric" }) : "No deadline"}</span>
             </div>
-            {s.progress > 0 && <>
-              <Progress pct={s.progress} color={s.progress >= 80 ? C.green : C.amber} />
+            <div style={{ fontSize: 12, color: C.textSub, marginBottom: 6 }}>{s.amount || "Amount not set"}</div>
+            {Number(s.progress || 0) > 0 && <>
+              <Progress pct={Number(s.progress || 0)} color={Number(s.progress || 0) >= 80 ? C.green : C.amber} />
               <div style={{ fontSize: 11, color: C.textSub, marginTop: 3 }}>Application {s.progress}% complete</div>
             </>}
-            {s.status === "Not Applied" && (
-              <Btn variant="outline" size="sm" style={{ marginTop: 8 }} onClick={() => setToast({ msg: "Scholarship added to your tracker!", type: "success" })}>Start Application</Btn>
+            {s.status === "not_applied" && (
+              <Btn variant="outline" size="sm" style={{ marginTop: 8 }} onClick={() => setToast({ msg: "Scholarship is ready for application.", type: "success" })}>Start Application</Btn>
             )}
           </Card>
         ))}
-        {/* Checklist */}
         <Card style={{ marginTop: 8 }}>
           <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 10 }}>📋 Required Documents Checklist</div>
           {["Admission letter / Student ID", "Academic transcripts", "WAEC / NECO results", "Birth certificate", "Guarantor letter", "Bank statement (last 3 months)", "Letter of recommendation"].map((d, i) => (
@@ -1178,16 +1248,19 @@ const Scholarship = ({ nav }) => {
         </Card>
       </div>
       <Modal open={modal} onClose={() => setModal(false)} title="Add Scholarship / Grant">
-        <Inp label="Scholarship name" value="" onChange={() => {}} placeholder="e.g. CBN Education Fund" />
-        <Inp label="Amount offered" value="" onChange={() => {}} placeholder="e.g. ₦200,000" />
-        <Inp label="Application deadline" type="date" value="" onChange={() => {}} placeholder="" />
-        <Select label="Current status" value="Not Applied" onChange={() => {}} options={[
-          { value: "Not Applied", label: "Not Applied Yet" },
-          { value: "Applied",     label: "Applied" },
-          { value: "In Review",   label: "Under Review" },
-          { value: "Awarded",     label: "Awarded" },
+        <Inp label="Scholarship name" value={form.name} onChange={(v) => setForm((f) => ({ ...f, name: v }))} placeholder="e.g. CBN Education Fund" />
+        <Inp label="Organization" value={form.organization} onChange={(v) => setForm((f) => ({ ...f, organization: v }))} placeholder="e.g. MTN Foundation" />
+        <Inp label="Amount offered" value={form.amount} onChange={(v) => setForm((f) => ({ ...f, amount: v }))} placeholder="e.g. ₦200,000" />
+        <Inp label="Application deadline" type="date" value={form.deadline} onChange={(v) => setForm((f) => ({ ...f, deadline: v }))} placeholder="" />
+        <Inp label="Progress (%)" type="number" value={form.progress} onChange={(v) => setForm((f) => ({ ...f, progress: v }))} placeholder="0" />
+        <Inp label="Notes" value={form.notes} onChange={(v) => setForm((f) => ({ ...f, notes: v }))} placeholder="Optional note" />
+        <Select label="Current status" value={form.status} onChange={(v) => setForm((f) => ({ ...f, status: v }))} options={[
+          { value: "not_applied", label: "Not Applied Yet" },
+          { value: "applied", label: "Applied" },
+          { value: "in_review", label: "Under Review" },
+          { value: "awarded", label: "Awarded" },
         ]} />
-        <Btn full variant="primary" onClick={() => { setModal(false); setToast({ msg: "Scholarship added to tracker!", type: "success" }); }}>Add to Tracker</Btn>
+        <Btn full variant="primary" onClick={handleCreate}>Add to Tracker</Btn>
       </Modal>
     </div>
   );
@@ -1195,24 +1268,52 @@ const Scholarship = ({ nav }) => {
 
 // ── Student Finance Module ────────────────────────────────────────
 const StudentFinance = ({ nav }) => {
-  const expenses = [
-    { name: "Tuition Fees",         spent: 85000, budget: 200000, icon: "🎓", c: C.blue   },
-    { name: "Hostel / Accommodation",spent: 45000, budget: 60000,  icon: "🏠", c: C.green  },
-    { name: "Food & Feeding",        spent: 18000, budget: 25000,  icon: "🍱", c: C.amber  },
-    { name: "Textbooks & Materials", spent: 12000, budget: 15000,  icon: "📚", c: C.purple },
-    { name: "Internet & Data",       spent: 5000,  budget: 6000,   icon: "📶", c: C.blue   },
-    { name: "Research & FYP",        spent: 22000, budget: 30000,  icon: "🔬", c: C.red    },
-    { name: "Certification Exams",   spent: 0,     budget: 50000,  icon: "📜", c: C.amber  },
-    { name: "Transport",             spent: 8000,  budget: 10000,  icon: "🚌", c: C.green  },
-  ];
+  const [summary, setSummary] = useState(null);
+  const [expenseRows, setExpenseRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const month = new Date().getMonth() + 1;
+    const year = new Date().getFullYear();
+    Promise.all([
+      studentFinance.getSummary(month, year),
+      studentFinance.getExpenses(month, year),
+    ])
+      .then(([summaryData, expenseData]) => {
+        setSummary(summaryData || null);
+        setExpenseRows(Array.isArray(expenseData) ? expenseData : []);
+      })
+      .catch(() => {
+        setSummary(null);
+        setExpenseRows([]);
+      })
+      .finally(() => setLoading(false));
+  }, []);
+
+  const categoryLabel = (category = "") => ({
+    tuition: "Tuition Fees",
+    hostel: "Hostel / Accommodation",
+    food: "Food & Feeding",
+    textbooks: "Textbooks & Materials",
+    internet: "Internet & Data",
+    research: "Research & FYP",
+    certification: "Certification Exams",
+    transport: "Transport",
+    laptop: "Laptop / Tech",
+    other: "Other",
+  }[category] || "Other");
+  const iconFor = (category = "") => ({ tuition: "🎓", hostel: "🏠", food: "🍱", textbooks: "📚", internet: "📶", research: "🔬", certification: "📜", transport: "🚌", laptop: "💻", other: "🧾" }[category] || "🧾");
+  const colorFor = (category = "") => ({ tuition: C.blue, hostel: C.green, food: C.amber, textbooks: C.purple, internet: C.blue, research: C.red, certification: C.amber, transport: C.green, laptop: C.purple, other: C.grey500 }[category] || C.grey500);
+  const usedPct = summary?.allowance ? Math.round((Number(summary.total_spent || 0) / Math.max(Number(summary.allowance || 1), 1)) * 100) : 0;
+
   return (
     <div style={{ paddingBottom: 80 }}>
       <PageHeader title="Student Finance" sub="Manage your academic expenses" onBack={() => nav("home")}>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginTop: 12 }}>
           {[
-            { l: "₦195k", sub: "Total spent", c: C.white },
-            { l: "₦201k", sub: "Remaining",   c: "#86efac" },
-            { l: "49%",   sub: "Budget used", c: "#fde68a" },
+            { l: loading ? "..." : formatNaira(summary?.total_spent || 0), sub: "Total spent", c: C.white },
+            { l: loading ? "..." : formatNaira(summary?.remaining || 0), sub: "Remaining", c: "#86efac" },
+            { l: loading ? "..." : `${usedPct}%`, sub: "Budget used", c: "#fde68a" },
           ].map((s, i) => (
             <div key={i} style={{ background: "rgba(255,255,255,0.15)", borderRadius: 8, padding: "8px 10px" }}>
               <div style={{ fontSize: 15, fontWeight: 800, color: s.c }}>{s.l}</div>
@@ -1224,24 +1325,29 @@ const StudentFinance = ({ nav }) => {
       <div style={{ padding: 16 }}>
         <Card style={{ marginBottom: 14, borderLeft: `4px solid ${C.blue}` }}>
           <div style={{ fontSize: 13, color: C.textSub, marginBottom: 2 }}>Monthly Allowance</div>
-          <div style={{ fontSize: 22, fontWeight: 700, color: C.text }}>₦45,000.00</div>
-          <Progress pct={65} color={C.blue} h={6} />
-          <div style={{ fontSize: 11, color: C.textSub, marginTop: 3 }}>₦29,250 remaining this month</div>
+          <div style={{ fontSize: 22, fontWeight: 700, color: C.text }}>{loading ? "..." : formatNaira(summary?.allowance || 0)}</div>
+          <Progress pct={usedPct || 0} color={C.blue} h={6} />
+          <div style={{ fontSize: 11, color: C.textSub, marginTop: 3 }}>{loading ? "Loading" : `${formatNaira(summary?.remaining || 0)} remaining this month`}</div>
         </Card>
         <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 12 }}>Academic Expense Tracker</div>
-        {expenses.map((e, i) => {
-          const pct = Math.round((e.spent / e.budget) * 100);
+        {loading ? (
+          <div style={{ fontSize: 13, color: C.textSub, padding: 8 }}>Loading expense tracker…</div>
+        ) : expenseRows.length === 0 ? (
+          <div style={{ fontSize: 13, color: C.textSub, padding: 8 }}>No expenses logged for this month yet.</div>
+        ) : expenseRows.map((e, i) => {
+          const pct = Number(e.budget || 0) ? Math.round((Number(e.amount || 0) / Number(e.budget || 1)) * 100) : 0;
+          const remaining = Number(e.budget || 0) - Number(e.amount || 0);
           return (
-            <Card key={i} style={{ marginBottom: 10 }}>
+            <Card key={e.id || i} style={{ marginBottom: 10 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={{ fontSize: 20 }}>{e.icon}</span>
-                  <span style={{ fontSize: 13, fontWeight: 600 }}>{e.name}</span>
+                  <span style={{ fontSize: 20 }}>{iconFor(e.category)}</span>
+                  <span style={{ fontSize: 13, fontWeight: 600 }}>{categoryLabel(e.category)}</span>
                 </div>
-                <span style={{ fontSize: 12, color: e.spent > e.budget ? C.red : C.textSub }}>₦{e.spent.toLocaleString()} / ₦{e.budget.toLocaleString()}</span>
+                <span style={{ fontSize: 12, color: Number(e.amount || 0) > Number(e.budget || 0) ? C.red : C.textSub }}>{formatNaira(e.amount || 0)} / {formatNaira(e.budget || 0)}</span>
               </div>
-              <Progress pct={pct || 0} color={e.spent > e.budget ? C.red : e.c} />
-              <div style={{ fontSize: 11, color: C.textSub, marginTop: 3 }}>{pct}% used · ₦{(e.budget - e.spent).toLocaleString()} remaining</div>
+              <Progress pct={pct || 0} color={Number(e.amount || 0) > Number(e.budget || 0) ? C.red : colorFor(e.category)} />
+              <div style={{ fontSize: 11, color: C.textSub, marginTop: 3 }}>{pct}% used · {formatNaira(remaining)} remaining</div>
             </Card>
           );
         })}
@@ -1896,11 +2002,10 @@ const SecurityScreen = ({ nav }) => {
   const [newPin, setNewPin]     = useState("");
   const [newPin2, setNewPin2]   = useState("");
 
-  const sessions = [
-    { dev: "iPhone 14 Pro — Safari",  loc: "Lagos, Nigeria",  time: "Now (Current)", active: true  },
-    { dev: "Chrome on Windows",        loc: "Abuja, Nigeria",  time: "2 days ago",    active: false },
-    { dev: "Samsung Galaxy S23",       loc: "Lagos, Nigeria",  time: "5 days ago",    active: false },
-  ];
+  const [sessions, setSessions] = useState([]);
+  useEffect(() => {
+    auth.getSessions().then((data) => setSessions(Array.isArray(data) ? data : [])).catch(() => setSessions([]));
+  }, []);
 
   const Toggle = ({ on, onToggle, label, sub }) => (
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "13px 0", borderBottom: `1px solid ${C.grey100}` }}>
@@ -1953,22 +2058,18 @@ const SecurityScreen = ({ nav }) => {
         {/* Sessions */}
         <div style={{ fontSize: 11, fontWeight: 700, color: C.textSub, letterSpacing: 1, textTransform: "uppercase", marginBottom: 6 }}>Active Sessions</div>
         <Card style={{ padding: 0, overflow: "hidden", marginBottom: 14 }}>
-          {sessions.map((s, i) => (
-            <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", borderBottom: i < sessions.length - 1 ? `1px solid ${C.grey100}` : "none" }}>
-              <span style={{ fontSize: 20 }}>{s.active ? "💻" : "📱"}</span>
+          {sessions.length === 0 ? (
+            <div style={{ padding: 14, fontSize: 12, color: C.textSub }}>Loading sessions…</div>
+          ) : sessions.map((s, i) => (
+            <div key={s.id || i} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", borderBottom: i < sessions.length - 1 ? `1px solid ${C.grey100}` : "none" }}>
+              <span style={{ fontSize: 20 }}>{s.device?.includes("Windows") ? "💻" : "📱"}</span>
               <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{s.dev}</div>
-                <div style={{ fontSize: 11, color: C.textSub }}>{s.loc} · {s.time}</div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{s.device || "Unknown device"}</div>
+                <div style={{ fontSize: 11, color: C.textSub }}>{s.location || "Unknown"} · {s.last_seen ? new Date(s.last_seen).toLocaleString("en-NG") : "Now"}</div>
               </div>
-              {s.active
-                ? <Badge color={C.green}>Active</Badge>
-                : <button onClick={() => setToast({ msg: "Session terminated.", type: "success" })} style={{ background: C.redPale, border: "none", borderRadius: 6, padding: "4px 10px", color: C.red, fontSize: 11, fontWeight: 600, cursor: "pointer" }}>End</button>
-              }
+              <Badge color={C.green}>Active</Badge>
             </div>
           ))}
-          <div style={{ padding: 12 }}>
-            <Btn full variant="ghost" size="sm" onClick={() => setToast({ msg: "All other sessions ended.", type: "success" })} style={{ color: C.red }}>End All Other Sessions</Btn>
-          </div>
         </Card>
 
         {/* Danger zone */}
@@ -1997,9 +2098,14 @@ const SecurityScreen = ({ nav }) => {
         <Inp label="New PIN" type="password" value={newPin} onChange={v => setNewPin(v.slice(0, 4))} placeholder="••••" />
         <Inp label="Confirm New PIN" type="password" value={newPin2} onChange={v => setNewPin2(v.slice(0, 4))} placeholder="••••" />
         <Btn full variant="primary" disabled={!oldPin || newPin.length < 4 || newPin !== newPin2}
-          onClick={() => {
-            setPinModal(false); setOldPin(""); setNewPin(""); setNewPin2("");
-            setToast({ msg: "PIN changed successfully!", type: "success" });
+          onClick={async () => {
+            try {
+              await auth.changePin({ current_pin: oldPin, new_pin: newPin, confirm_pin: newPin2 });
+              setPinModal(false); setOldPin(""); setNewPin(""); setNewPin2("");
+              setToast({ msg: "PIN changed successfully!", type: "success" });
+            } catch (e) {
+              setToast({ msg: e.detail || e.current_pin || e.confirm_pin || "Unable to change PIN", type: "error" });
+            }
           }}>Change PIN</Btn>
         {newPin && newPin2 && newPin !== newPin2 && <p style={{ fontSize: 12, color: C.red, marginTop: 8 }}>PINs do not match</p>}
       </Modal>
@@ -2072,10 +2178,10 @@ const AppSettings = ({ nav }) => {
         <div style={{ fontSize: 11, fontWeight: 700, color: C.textSub, letterSpacing: 1, textTransform: "uppercase", marginBottom: 6 }}>About</div>
         <Card style={{ marginBottom: 14 }}>
           {[
-            ["App Version",          "v4.0.0 (Build 401)"],
-            ["Last Updated",         "July 2025"],
+            ["App Version",          "v1.0.0 (Build 401)"],
+            ["Last Updated",         "July 2026"],
             ["Shari'ah Compliance",  "AAOIFI Standards"],
-            ["FYP Session",          "2024/2025"],
+            ["FYP Session",          "2025/2026"],
             ["Developer",            "Abdurkabir Mardhiyyah"],
             ["Support",              "help@noorpay.ng"],
           ].map(([k, v], i, arr) => (
@@ -2087,8 +2193,8 @@ const AppSettings = ({ nav }) => {
         </Card>
 
         <div style={{ background: C.greenPale, border: `1px solid ${C.green}30`, borderRadius: 8, padding: 12, textAlign: "center" }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: C.green, marginBottom: 4 }}>🕌 NoorPay v4.0</div>
-          <div style={{ fontSize: 11, color: C.textSub }}>Final Year Project · Abdurkabir Mardhiyyah<br />Department of Computer Science · 2024/2025</div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: C.green, marginBottom: 4 }}>🕌 NoorPay </div>
+          <div style={{ fontSize: 11, color: C.textSub }}>Final Year Project · Abdurkabir Mardhiyyah<br />Department of Mathematical and Computer Sciences · 2025/2026</div>
         </div>
       </div>
     </div>
@@ -2101,15 +2207,17 @@ const BeneficiariesScreen = ({ nav }) => {
   const [modal, setModal] = useState(false);
   const [toast, setToast] = useState(null);
   const [search, setSearch] = useState("");
-  const [bens, setBens] = useState([
-    { name: "Ahmad Musa",    bank: "NoorPay",   account: "0987654321", icon: "🧑", fav: true  },
-    { name: "Fatimah Bello", bank: "GTBank",   account: "0112345678", icon: "👩", fav: true  },
-    { name: "Ibrahim Saleh", bank: "NoorPay",   account: "0123987654", icon: "👨", fav: false },
-    { name: "Aisha Yusuf",   bank: "Access",   account: "0445566778", icon: "👩", fav: false },
-    { name: "Musa Ibrahim",  bank: "First Bank",account:"3344556677", icon: "🧑", fav: false },
-  ]);
+  const [bens, setBens] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [form, setForm] = useState({ name: "", bank: "NoorPay", account: "" });
-  const shown = bens.filter(b => b.name.toLowerCase().includes(search.toLowerCase()));
+  useEffect(() => {
+    let active = true;
+    wallet.getBeneficiaries().then((data) => {
+      if (active) setBens(Array.isArray(data) ? data : []);
+    }).catch(() => { if (active) setBens([]); }).finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, []);
+  const shown = bens.filter((b) => (b.name || "").toLowerCase().includes(search.toLowerCase()));
 
   return (
     <div style={{ paddingBottom: 80 }}>
@@ -2124,15 +2232,15 @@ const BeneficiariesScreen = ({ nav }) => {
         </div>
 
         {/* Favourites */}
-        {shown.filter(b => b.fav).length > 0 && <>
+        {shown.filter((b) => b.is_favourite).length > 0 && <>
           <div style={{ fontSize: 11, fontWeight: 700, color: C.textSub, letterSpacing: 1, textTransform: "uppercase", marginBottom: 8 }}>Favourites ⭐</div>
           <Card style={{ overflow: "hidden", padding: 0, marginBottom: 14 }}>
-            {shown.filter(b => b.fav).map((b, i, arr) => (
-              <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", borderBottom: i < arr.length - 1 ? `1px solid ${C.grey100}` : "none" }}>
-                <div style={{ width: 40, height: 40, borderRadius: 10, background: C.greenPale, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>{b.icon}</div>
+            {shown.filter((b) => b.is_favourite).map((b, i, arr) => (
+              <div key={b.id || i} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", borderBottom: i < arr.length - 1 ? `1px solid ${C.grey100}` : "none" }}>
+                <div style={{ width: 40, height: 40, borderRadius: 10, background: C.greenPale, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>👤</div>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{b.name}</div>
-                  <div style={{ fontSize: 11, color: C.textSub }}>{b.bank} · {b.account}</div>
+                  <div style={{ fontSize: 11, color: C.textSub }}>{b.bank_name || "NoorPay"} · {b.account_number}</div>
                 </div>
                 <Btn variant="primary" size="sm" onClick={() => nav("send")}>Send</Btn>
               </div>
@@ -2143,16 +2251,27 @@ const BeneficiariesScreen = ({ nav }) => {
         {/* All */}
         <div style={{ fontSize: 11, fontWeight: 700, color: C.textSub, letterSpacing: 1, textTransform: "uppercase", marginBottom: 8 }}>All Beneficiaries</div>
         <Card style={{ overflow: "hidden", padding: 0 }}>
-          {shown.map((b, i, arr) => (
-            <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", borderBottom: i < arr.length - 1 ? `1px solid ${C.grey100}` : "none" }}>
-              <div style={{ width: 40, height: 40, borderRadius: 10, background: C.grey100, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>{b.icon}</div>
+          {loading ? (
+            <div style={{ padding: 14, fontSize: 12, color: C.textSub }}>Loading beneficiaries…</div>
+          ) : shown.length === 0 ? (
+            <div style={{ padding: 14, fontSize: 12, color: C.textSub }}>No beneficiaries yet.</div>
+          ) : shown.map((b, i, arr) => (
+            <div key={b.id || i} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", borderBottom: i < arr.length - 1 ? `1px solid ${C.grey100}` : "none" }}>
+              <div style={{ width: 40, height: 40, borderRadius: 10, background: C.grey100, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>👤</div>
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{b.name}</div>
-                <div style={{ fontSize: 11, color: C.textSub }}>{b.bank} · {b.account}</div>
+                <div style={{ fontSize: 11, color: C.textSub }}>{b.bank_name || "NoorPay"} · {b.account_number}</div>
               </div>
               <div style={{ display: "flex", gap: 6 }}>
-                <button onClick={() => { setBens(prev => prev.map((x, j) => j === bens.indexOf(b) ? { ...x, fav: !x.fav } : x)); setToast({ msg: b.fav ? "Removed from favourites" : "Added to favourites ⭐", type: "success" }); }}
-                  style={{ background: "none", border: "none", fontSize: 18, cursor: "pointer" }}>{b.fav ? "⭐" : "☆"}</button>
+                <button onClick={async () => {
+                  try {
+                    await wallet.toggleFavourite(b.id);
+                    setBens(prev => prev.map((x) => x.id === b.id ? { ...x, is_favourite: !x.is_favourite } : x));
+                    setToast({ msg: b.is_favourite ? "Removed from favourites" : "Added to favourites ⭐", type: "success" });
+                  } catch {
+                    setToast({ msg: "Unable to update favourite", type: "error" });
+                  }
+                }} style={{ background: "none", border: "none", fontSize: 18, cursor: "pointer" }}>{b.is_favourite ? "⭐" : "☆"}</button>
                 <Btn variant="primary" size="sm" onClick={() => nav("send")}>Send</Btn>
               </div>
             </div>
@@ -2169,7 +2288,17 @@ const BeneficiariesScreen = ({ nav }) => {
         ]} />
         <Inp label="Account number" value={form.account} onChange={v => setForm(f => ({ ...f, account: v.slice(0, 10) }))} placeholder="10-digit account number" note="Must be exactly 10 digits" />
         <Btn full variant="primary" disabled={!form.name || form.account.length < 10}
-          onClick={() => { setBens(prev => [...prev, { ...form, icon: "👤", fav: false }]); setModal(false); setForm({ name: "", bank: "NoorPay", account: "" }); setToast({ msg: `${form.name} added!`, type: "success" }); }}>
+          onClick={async () => {
+            try {
+              const created = await wallet.addBeneficiary({ name: form.name, account_number: form.account, bank_name: form.bank, bank_code: form.bank === "NoorPay" ? "000" : "001" });
+              setBens(prev => [...prev, created]);
+              setModal(false);
+              setForm({ name: "", bank: "NoorPay", account: "" });
+              setToast({ msg: `${form.name} added!`, type: "success" });
+            } catch (e) {
+              setToast({ msg: e.detail || "Unable to add beneficiary", type: "error" });
+            }
+          }}>
           Save Beneficiary
         </Btn>
       </Modal>
@@ -2182,13 +2311,27 @@ const SendMoney = ({ nav }) => {
   const [step, setStep] = useState(1);
   const [form, setForm] = useState({ recipient: "", amount: "", note: "", pin: ["", "", "", ""] });
   const [toast, setToast] = useState(null);
+  const [beneficiaries, setBeneficiaries] = useState([]);
+  const [reference, setReference] = useState("");
   const pinRefs = useRef([]);
+  useEffect(() => {
+    wallet.getBeneficiaries().then((data) => setBeneficiaries(Array.isArray(data) ? data : [])).catch(() => setBeneficiaries([]));
+  }, []);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const handlePin = (i, v) => {
     const a = [...form.pin]; a[i] = v.slice(-1); set("pin", a);
     if (v && i < 3) pinRefs.current[i + 1]?.focus();
   };
-  const ref = "AMP" + Date.now().toString().slice(-8);
+  const submitTransfer = async () => {
+    try {
+      const data = await txApi.sendInternal({ recipient_account: form.recipient, amount: form.amount, pin: form.pin.join(""), note: form.note });
+      setReference(data.reference || "");
+      setStep(3);
+      setToast({ msg: "Transfer successful!", type: "success" });
+    } catch (e) {
+      setToast({ msg: e.detail || "Transfer failed", type: "error" });
+    }
+  };
   return (
     <div style={{ paddingBottom: 80 }}>
       {toast && <Toast msg={toast.msg} type={toast.type} onDone={() => setToast(null)} />}
@@ -2200,15 +2343,15 @@ const SendMoney = ({ nav }) => {
             <div style={{ marginBottom: 14 }}>
               <div style={{ fontSize: 13, fontWeight: 600, color: C.grey700, marginBottom: 8 }}>Recent beneficiaries</div>
               <div style={{ display: "flex", gap: 10, overflowX: "auto", paddingBottom: 4 }}>
-                {["Ahmad M.", "Fatimah B.", "Ibrahim S."].map((n, i) => (
-                  <button key={i} onClick={() => set("recipient", n)} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, background: form.recipient === n ? C.greenPale : C.grey100, border: `1.5px solid ${form.recipient === n ? C.green : C.grey200}`, borderRadius: 10, padding: "8px 14px", cursor: "pointer", flexShrink: 0 }}>
+                {beneficiaries.slice(0, 3).map((b, i) => (
+                  <button key={b.id || i} onClick={() => set("recipient", b.account_number)} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, background: form.recipient === b.account_number ? C.greenPale : C.grey100, border: `1.5px solid ${form.recipient === b.account_number ? C.green : C.grey200}`, borderRadius: 10, padding: "8px 14px", cursor: "pointer", flexShrink: 0 }}>
                     <span style={{ fontSize: 22 }}>👤</span>
-                    <span style={{ fontSize: 11, fontWeight: 600, color: C.text }}>{n}</span>
+                    <span style={{ fontSize: 11, fontWeight: 600, color: C.text }}>{b.name}</span>
                   </button>
                 ))}
               </div>
             </div>
-            <Inp label="Or enter account number / name" value={form.recipient} onChange={v => set("recipient", v)} placeholder="Account number or name" />
+            <Inp label="Recipient account number" value={form.recipient} onChange={v => set("recipient", v)} placeholder="10-digit account number" note="Enter the NoorPay account number of the recipient" />
             <Inp label="Amount (₦)" type="number" value={form.amount} onChange={v => set("amount", v)} placeholder="0.00" />
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
               {["5000", "10000", "25000", "50000"].map(a => (
@@ -2239,7 +2382,7 @@ const SendMoney = ({ nav }) => {
                 ))}
               </div>
             </div>
-            <Btn full variant="primary" disabled={form.pin.join("").length < 4} onClick={() => setStep(3)}>Authorise Transfer</Btn>
+            <Btn full variant="primary" disabled={form.pin.join("").length < 4} onClick={submitTransfer}>Authorise Transfer</Btn>
           </Card>
         )}
         {step === 3 && (
@@ -2248,7 +2391,7 @@ const SendMoney = ({ nav }) => {
             <div style={{ fontSize: 22, fontWeight: 700, color: C.text, marginBottom: 8 }}>Transfer Successful!</div>
             <div style={{ fontSize: 14, color: C.textSub, marginBottom: 4 }}>₦{Number(form.amount).toLocaleString()} sent to</div>
             <div style={{ fontSize: 16, fontWeight: 700, color: C.green, marginBottom: 4 }}>{form.recipient}</div>
-            <div style={{ fontSize: 12, color: C.textSub, marginBottom: 24 }}>Reference: {ref}</div>
+            <div style={{ fontSize: 12, color: C.textSub, marginBottom: 24 }}>Reference: {reference || "AMP0000000000"}</div>
             <Btn full variant="primary" onClick={() => nav("home")}>Back to Home</Btn>
           </div>
         )}
@@ -2259,33 +2402,73 @@ const SendMoney = ({ nav }) => {
 
 // ── Notifications ─────────────────────────────────────────────────
 const Notifications = ({ nav }) => {
-  const notifs = [
-    { icon: "💰", title: "Salary Received",       body: "₦250,000 credited to your wallet",         time: "2h ago",   read: false, c: C.green },
-    { icon: "⭐", title: "Zakat Reminder",         body: "Your annual Zakat is due — ₦12,181",       time: "1d ago",   read: false, c: C.amber },
-    { icon: "🎓", title: "Scholarship Deadline",   body: "MTN Foundation — deadline in 5 days!",     time: "2d ago",   read: true,  c: C.red   },
-    { icon: "📊", title: "Budget Alert",           body: "Entertainment budget exceeded by ₦3,500", time: "3d ago",   read: true,  c: C.red   },
-    { icon: "🤝", title: "Qard Hasan Approved",    body: "Your loan application has been approved",  time: "4d ago",   read: true,  c: C.green },
-    { icon: "🎁", title: "Reward Earned",          body: "You earned 200 loyalty points!",           time: "5d ago",   read: true,  c: C.amber },
-    { icon: "📅", title: "Savings Auto-deducted",  body: "₦5,000 saved to Hajj Fund automatically", time: "6d ago",   read: true,  c: C.blue  },
-  ];
+  const [items, setItems] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [toast, setToast] = useState(null);
+
+  const loadNotifications = async () => {
+    setLoading(true);
+    try {
+      const [rows, countData] = await Promise.all([notifApi.getAll(), notifApi.getUnreadCount()]);
+      setItems(Array.isArray(rows) ? rows : []);
+      setUnreadCount(Number(countData?.unread_count || 0));
+    } catch {
+      setItems([]);
+      setUnreadCount(0);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadNotifications();
+  }, []);
+
+  const handleMarkAllRead = async () => {
+    try {
+      await notifApi.markAllRead();
+      setItems((prev) => prev.map((n) => ({ ...n, is_read: true })));
+      setUnreadCount(0);
+      setToast({ msg: "All notifications marked as read.", type: "success" });
+    } catch {
+      setToast({ msg: "Unable to update notifications.", type: "error" });
+    }
+  };
+
+  const handleMarkRead = async (id) => {
+    try {
+      await notifApi.markRead(id);
+      setItems((prev) => prev.map((n) => (n.id === id ? { ...n, is_read: true } : n)));
+      setUnreadCount((prev) => Math.max(0, prev - 1));
+    } catch {
+      setToast({ msg: "Could not mark notification as read.", type: "error" });
+    }
+  };
+
   return (
     <div style={{ paddingBottom: 80 }}>
-      <PageHeader title="Notifications" sub="2 unread" onBack={() => nav("home")} />
+      {toast && <Toast msg={toast.msg} type={toast.type} onDone={() => setToast(null)} />}
+      <PageHeader title="Notifications" sub={loading ? "Loading…" : `${unreadCount} unread`} onBack={() => nav("home")} />
       <div style={{ padding: 16 }}>
         <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>
-          <button style={{ background: "none", border: "none", color: C.green, fontSize: 13, cursor: "pointer" }}>Mark all read</button>
+          <button onClick={handleMarkAllRead} style={{ background: "none", border: "none", color: C.green, fontSize: 13, cursor: "pointer" }}>Mark all read</button>
         </div>
-        {notifs.map((n, i) => (
-          <Card key={i} style={{ marginBottom: 8, background: n.read ? C.white : C.greenPale, borderLeft: `3px solid ${n.read ? C.grey200 : n.c}` }}>
+        {loading ? (
+          <div style={{ fontSize: 13, color: C.textSub, padding: 8 }}>Loading notifications…</div>
+        ) : items.length === 0 ? (
+          <div style={{ fontSize: 13, color: C.textSub, padding: 8 }}>You do not have notifications yet.</div>
+        ) : items.map((n, i) => (
+          <Card key={n.id || i} style={{ marginBottom: 8, background: n.is_read ? C.white : C.greenPale, borderLeft: `3px solid ${n.is_read ? C.grey200 : C.green}` }}>
             <div style={{ display: "flex", gap: 10 }}>
-              <span style={{ fontSize: 24, flexShrink: 0 }}>{n.icon}</span>
+              <span style={{ fontSize: 24, flexShrink: 0 }}>{n.type === "budget" ? "📊" : n.type === "zakat" ? "⭐" : n.type === "scholarship" ? "🎓" : n.type === "reward" ? "🎁" : "🔔"}</span>
               <div style={{ flex: 1 }}>
                 <div style={{ display: "flex", justifyContent: "space-between" }}>
-                  <span style={{ fontSize: 13, fontWeight: n.read ? 500 : 700, color: C.text }}>{n.title}</span>
-                  {!n.read && <div style={{ width: 8, height: 8, borderRadius: "50%", background: n.c, flexShrink: 0, marginTop: 4 }} />}
+                  <span style={{ fontSize: 13, fontWeight: n.is_read ? 500 : 700, color: C.text }}>{n.title}</span>
+                  {!n.is_read && <button onClick={() => handleMarkRead(n.id)} style={{ background: "none", border: "none", color: C.green, fontSize: 11, cursor: "pointer" }}>Mark read</button>}
                 </div>
                 <div style={{ fontSize: 12, color: C.textSub, marginTop: 2, lineHeight: 1.4 }}>{n.body}</div>
-                <div style={{ fontSize: 10, color: C.textSub, marginTop: 4 }}>{n.time}</div>
+                <div style={{ fontSize: 10, color: C.textSub, marginTop: 4 }}>{new Date(n.created_at).toLocaleString("en-NG", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</div>
               </div>
             </div>
           </Card>
@@ -2347,7 +2530,7 @@ const Reports = ({ nav }) => {
 };
 
 // ── Profile / Me ──────────────────────────────────────────────────
-const Profile = ({ nav, user }) => {
+const Profile = ({ nav, user, onLogout }) => {
   const groups = [
     { title: "My Account", items: [
       { icon: "👤", label: "Personal Information",      to: "home"           },
@@ -2379,8 +2562,8 @@ const Profile = ({ nav, user }) => {
           <div style={{ width: 60, height: 60, borderRadius: 30, background: "rgba(255,255,255,0.2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28 }}>👤</div>
           <div>
             <div style={{ fontSize: 18, fontWeight: 700, color: C.white }}>{user?.full_name || "NoorPay User"}</div>
-            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.7)", marginBottom: 4 }}>{user?.email || "Loading..."}</div>
-            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.7)", marginBottom: 4 }}>Account: {user?.account_number || "Not assigned"}</div>
+            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.7)" }}>{user?.email || "Loading..."}</div>
+            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.7)", marginTop: 2 }}>Account: {user?.account_number || "Not assigned"}</div>
             <div style={{ marginTop: 4 }}><Badge color="#86efac">{user?.is_verified ? "✅ Verified" : "Awaiting verification"}</Badge></div>
           </div>
         </div>
@@ -2420,20 +2603,17 @@ const Profile = ({ nav, user }) => {
 // ── Transactions ──────────────────────────────────────────────────
 const Transactions = ({ nav }) => {
   const [filter, setFilter] = useState("all");
-  const all = [
-    { icon: "💰", title: "Salary Credit",      sub: "GTBank Payroll",       amt: "+₦250,000", col: C.green,  cat: "income"   },
-    { icon: "💸", title: "Transfer to Ahmad",   sub: "NoorPay Internal",      amt: "-₦15,000",  col: C.red,    cat: "transfer" },
-    { icon: "📱", title: "MTN Data — 5GB",      sub: "Bills",                amt: "-₦2,500",   col: C.red,    cat: "bills"    },
-    { icon: "⭐", title: "Zakat Payment",        sub: "Islamic Finance",      amt: "-₦8,000",   col: C.amber,  cat: "zakat"    },
-    { icon: "💰", title: "Qard Repayment Recv.", sub: "Community Finance",    amt: "+₦10,000",  col: C.green,  cat: "income"   },
-    { icon: "📱", title: "Airtel Airtime",       sub: "Bills",                amt: "-₦1,000",   col: C.red,    cat: "bills"    },
-    { icon: "💰", title: "Wallet Funding",       sub: "Bank Transfer In",     amt: "+₦100,000", col: C.green,  cat: "income"   },
-    { icon: "🎓", title: "Tuition Payment",      sub: "Student Expense",      amt: "-₦85,000",  col: C.red,    cat: "student"  },
-    { icon: "🌙", title: "Sadaqah Donation",     sub: "Clean Water Campaign", amt: "-₦5,000",   col: C.purple, cat: "zakat"    },
-    { icon: "🎁", title: "Reward Cashback",      sub: "Loyalty Points",       amt: "+₦850",     col: C.green,  cat: "income"   },
-  ];
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    let active = true;
+    txApi.getAll().then((data) => {
+      if (active) setItems(Array.isArray(data) ? data : []);
+    }).catch(() => { if (active) setItems([]); }).finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, []);
   const filters = ["all", "income", "transfer", "bills", "zakat", "student"];
-  const shown = filter === "all" ? all : all.filter(t => t.cat === filter);
+  const shown = filter === "all" ? items : items.filter((t) => (t.category || "").toLowerCase() === filter || (t.type || "").toLowerCase() === filter);
   return (
     <div style={{ paddingBottom: 80 }}>
       <PageHeader title="Transactions" sub="Full payment history" />
@@ -2444,7 +2624,18 @@ const Transactions = ({ nav }) => {
       </div>
       <div style={{ padding: "10px 14px 0" }}>
         <Card style={{ overflow: "hidden", padding: 0 }}>
-          {shown.map((tx, i) => <ListItem key={i} icon={tx.icon} title={tx.title} sub={tx.sub} right={tx.amt} rightColor={tx.col} />)}
+          {loading ? (
+            <div style={{ padding: 14, fontSize: 12, color: C.textSub }}>Loading transactions…</div>
+          ) : shown.length === 0 ? (
+            <div style={{ padding: 14, fontSize: 12, color: C.textSub }}>No transactions found for this filter.</div>
+          ) : shown.map((tx, i) => {
+            const isIncoming = tx.type === "credit" || tx.type === "income";
+            const icon = tx.type === "transfer" ? "💸" : tx.type === "airtime" ? "📱" : tx.type === "data" ? "📦" : tx.type === "zakat" ? "⭐" : tx.type === "qard" ? "🤝" : "💰";
+            const title = tx.description || "Transaction";
+            const sub = tx.recipient_name || tx.bank_name || new Date(tx.created_at).toLocaleDateString("en-NG", { month: "short", day: "numeric" });
+            const right = `${isIncoming ? "+" : "-"}${formatNaira(tx.amount)}`;
+            return <ListItem key={tx.id || i} icon={icon} title={title} sub={sub} right={right} rightColor={isIncoming ? C.green : C.red} />;
+          })}
         </Card>
       </div>
     </div>
@@ -2458,8 +2649,10 @@ const AirtimeData = ({ nav }) => {
   const [phone, setPhone] = useState("");
   const [amount, setAmount] = useState("");
   const [bundle, setBundle] = useState("");
+  const [pin, setPin] = useState("");
   const [done, setDone] = useState(false);
   const [toast, setToast] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
   const nets = [{ k: "mtn", l: "MTN", c: "#FFCB05" }, { k: "airtel", l: "Airtel", c: "#E40000" }, { k: "glo", l: "Glo", c: "#006600" }, { k: "9mobile", l: "9mobile", c: "#008000" }];
   const bundles = [{ l: "1GB · 30 days", p: "500" }, { l: "2GB · 30 days", p: "1000" }, { l: "5GB · 30 days", p: "2000" }, { l: "10GB · 30 days", p: "3500" }];
   if (done) return (
@@ -2492,6 +2685,7 @@ const AirtimeData = ({ nav }) => {
             ))}
           </div>
           <Inp label="Phone number" type="tel" value={phone} onChange={setPhone} placeholder="080 0000 0000" />
+          <Inp label="Transaction PIN" type="password" value={pin} onChange={v => setPin(v.slice(0, 4))} placeholder="••••" note="Enter your 4-digit transaction PIN" />
           {mode === "airtime" ? <>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
               {["100", "200", "500", "1000", "2000"].map(a => (
@@ -2507,8 +2701,23 @@ const AirtimeData = ({ nav }) => {
               </button>
             ))}
           </>}
-          <Btn full variant="primary" disabled={!phone || !amount} style={{ marginTop: 4 }} onClick={() => { setDone(true); setToast({ msg: `${mode === "airtime" ? "Airtime" : "Data"} delivered to ${phone}`, type: "success" }); }}>
-            Pay ₦{Number(amount || 0).toLocaleString()}
+          <Btn full variant="primary" disabled={!phone || !amount || pin.length < 4 || submitting} style={{ marginTop: 4 }} onClick={async () => {
+            setSubmitting(true);
+            try {
+              if (mode === "airtime") {
+                await txApi.buyAirtime({ phone, amount, network: net, pin });
+              } else {
+                await txApi.buyData({ phone, amount, network: net, pin, bundle_name: bundle || "Data bundle" });
+              }
+              setDone(true);
+              setToast({ msg: `${mode === "airtime" ? "Airtime" : "Data"} delivered to ${phone}`, type: "success" });
+            } catch (e) {
+              setToast({ msg: e.detail || "Purchase failed", type: "error" });
+            } finally {
+              setSubmitting(false);
+            }
+          }}>
+            {submitting ? "Processing..." : `Pay ₦${Number(amount || 0).toLocaleString()}`}
           </Btn>
         </Card>
       </div>
@@ -2596,11 +2805,11 @@ const Cards = ({ nav }) => {
 // MAIN APP SHELL
 // ════════════════════════════════════════════════════════════════
 export default function App() {
-  const [auth, setAuth]   = useState("landing");
+  const [authScreen, setAuthScreen] = useState("landing");
   const [page, setPage]   = useState("home");
   const [navAct, setNavAct] = useState("home");
   const [receiveOpen, setReceiveOpen] = useState(false);
-  const [user, setUser]           = useState(null);
+  const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
 
   useEffect(() => {
@@ -2611,30 +2820,19 @@ export default function App() {
     auth.getProfile()
       .then((profile) => {
         setUser(profile);
-        setAuth("app");
+        setAuthScreen("app");
       })
       .catch(() => {
         clearTokens();
-        setAuth("landing");
+        setAuthScreen("login");
       })
       .finally(() => setAuthLoading(false));
   }, []);
 
-  useEffect(() => {
-    const handleSessionExpired = () => {
-      clearTokens();
-      setUser(null);
-      setAuth("login");
-    };
-    window.addEventListener('noorpay:logout', handleSessionExpired);
-    return () => window.removeEventListener('noorpay:logout', handleSessionExpired);
-  }, []);
-
   const handleLogin = async (email, password) => {
     const data = await auth.login(email, password);
-    setTokens(data.access, data.refresh);
     setUser(data.user);
-    setAuth("app");
+    setAuthScreen("app");
   };
 
   const handleLogout = async () => {
@@ -2643,12 +2841,12 @@ export default function App() {
     setUser(null);
     setPage("home");
     setNavAct("home");
-    setAuth("login");
+    setAuthScreen("login");
   };
 
   const handleRegisterSuccess = (profile) => {
     setUser(profile);
-    setAuth("app");
+    setAuthScreen("app");
   };
 
   const nav = (p) => {
@@ -2665,16 +2863,37 @@ export default function App() {
     { key: "me",           icon: "👤", label: "Me"        },
   ];
 
+
+
+
+
   if (authLoading) return <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, color: C.text }}>Loading NoorPay...</div>;
-  if (authLoading) return <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, color: C.text }}>Loading NoorPay...</div>;
-  if (auth === "landing")  return <LandingPage onGetStarted={() => setAuth("splash")} onLogin={() => setAuth("login")} />;
-  if (auth === "splash")   return <><GS/><Splash   onDone={() => setAuth("onboard")} /></>;
-  if (auth === "onboard")  return <><GS/><Onboard  onDone={() => setAuth("login")} /></>;
-  if (auth === "login")    return <><GS/><Login    onLogin={handleLogin} onReg={() => setAuth("register")} /></>;
-  if (auth === "register") return <><GS/><Register onDone={handleRegisterSuccess} onLogin={() => setAuth("login")} /></>;
+
+  if (authScreen === "landing")
+  return <LandingPage onGetStarted={() => setAuthScreen("splash")} onLogin={() => setAuthScreen("login")} />;
+
+if (authScreen === "splash")
+  return <><GS /><Splash onDone={() => setAuthScreen("onboard")} /></>;
+
+if (authScreen === "onboard")
+  return <><GS /><Onboard onDone={() => setAuthScreen("login")} /></>;
+
+if (authScreen === "login")
+  return <><GS /><Login onLogin={handleLogin} onReg={() => setAuthScreen("register")} /></>;
+
+if (authScreen === "register")
+  return <><GS /><Register onDone={handleRegisterSuccess} onLogin={() => setAuthScreen("login")} /></>;
+
+
+  // if (auth === "landing")  return <LandingPage onGetStarted={() => setAuth("splash")} onLogin={() => setAuth("login")} />;
+  // if (auth === "splash")   return <><GS/><Splash   onDone={() => setAuth("onboard")} /></>;
+  // if (auth === "onboard")  return <><GS/><Onboard  onDone={() => setAuth("login")} /></>;
+  // if (auth === "login")    return <><GS/><Login    onLogin={() => setAuth("app")} onReg={() => setAuth("register")} /></>;
+  // if (auth === "register") return <><GS/><Register onDone={() => setAuth("app")} onLogin={() => setAuth("login")} /></>;
 
   // Full-screen pages (no bottom nav)
   // const [receiveOpen, setReceiveOpen] = useState(false);
+  if (authScreen !== "app") return null;
   const fullPages = {
     send: SendMoney, airtime: AirtimeData, scholarship: Scholarship,
     student: StudentFinance, qard: QardHasan, zakat: ZakatModule,
