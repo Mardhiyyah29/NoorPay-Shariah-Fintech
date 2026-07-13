@@ -25,3 +25,45 @@ Notes
 - For production set `VITE_API_URL` in the frontend environment to point to the deployed backend (include `/api` suffix).
 - There's a helper script for Windows to start both servers: `scripts/start-dev.ps1`.
 - CI workflow exists at `.github/workflows/ci.yml` and runs backend tests and an e2e smoke script.
+
+## Production deployment guidance
+
+### Required production environment variables
+
+Backend
+- `SECRET_KEY`: Django secret key
+- `DEBUG=0`
+- `DJANGO_ALLOWED_HOSTS`: production host(s)
+- `DATABASE_URL`: Postgres connection URL, e.g. `postgres://user:pass@host:5432/dbname`
+- `CORS_ALLOWED_ORIGINS`: comma-separated frontend URL(s), e.g. `https://app.example.com`
+- `CSRF_TRUSTED_ORIGINS`: comma-separated trusted origin(s)
+- `VITE_API_URL`: frontend build-time API base URL, e.g. `https://api.example.com/api`
+
+Frontend
+- `VITE_API_URL`: points to deployed backend API endpoint, e.g. `https://api.example.com/api`
+
+### Deployment targets
+
+- Local Docker Compose
+- Render Docker services for frontend and backend
+- Vercel static frontend hosting
+- Kubernetes manifests in `k8s/`
+
+### Local Docker Compose
+
+```powershell
+cd C:\Users\HP\OneDrive\Desktop\Projects\NoorPay-Shariah-Fintech
+docker compose up --build
+```
+
+Backend: `http://localhost:8000`
+Frontend: `http://localhost:5173`
+
+### Production checkboxes
+
+- [ ] Use Postgres instead of SQLite
+- [ ] Set `VITE_API_URL` for production builds
+- [ ] Keep `DEBUG=0` in production
+- [ ] Store `SECRET_KEY` in secure secret storage
+- [ ] Configure CORS and CSRF for production domains
+- [ ] Remove any debug-only endpoints or payloads from production
