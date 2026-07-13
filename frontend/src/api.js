@@ -56,6 +56,12 @@ export const auth = {
     setTokens(data.access, data.refresh);
     return data;
   },
+  forgotPassword: async (email) => {
+    return request('/auth/forgot-password/', { method: 'POST', body: JSON.stringify({ email }) });
+  },
+  resetPassword: async (d) => {
+    return request('/auth/reset-password/', { method: 'POST', body: JSON.stringify(d) });
+  },
 
   login: async (email, password) => {
     const data = await request('/auth/login/', { method: 'POST', body: JSON.stringify({ email, password }) });

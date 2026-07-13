@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  test-and-smoke:
+    runs-on: ubuntu-latest
+    services: {}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install backend requirements
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f backend/requirements.txt ]; then pip install -r backend/requirements.txt; fi
+
+      - name: Install frontend dependencies
+        run: |
+          if [ -f frontend/package.json ]; then cd frontend && npm ci; fi
+
+      - name: Run Django migrations
+        run: |
+          cd backend
+          python manage.py migrate --noinput
+
+      - name: Run backend unit tests
+        run: |
+          cd backend
+          python manage.py test --verbosity=1
+
+      - name: Start Django server in background
+        run: |
+          cd backend
+          python manage.py runserver 127.0.0.1:8000 &
+          # wait for server
+          for i in 1 2 3 4 5; do
+            sleep 2
+            curl -sS http://127.0.0.1:8000/ && break || true
+          done
+
+      - name: Run e2e smoke script
+        run: |
+          node backend/scripts/e2e_smoke.js
