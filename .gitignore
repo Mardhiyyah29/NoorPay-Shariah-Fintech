@@ -1,0 +1,60 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pyc
+*.pdb
+*.egg-info/
+*.egg
+*.manifest
+*.spec
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv/
+
+# Django
+*.log
+*.pot
+*.pyc
+*.sqlite3
+db.sqlite3
+db.sqlite3.bak
+/media
+/staticfiles
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+pnpm-lock.yaml
+
+# Environment
+.env
+.env.*
+
+# IDEs
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+
+# Docker
+docker-compose.override.yml
+
+# Build
+dist/
+build/
+
+# Misc
+.DS_Store
+*.bak
+*.tmp
+*~
