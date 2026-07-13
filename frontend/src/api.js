@@ -31,6 +31,16 @@ export const clearTokens = () => {
 };
 export const isLoggedIn  = () => !!getAccessToken();
 
+// Keep in-memory tokens in sync when `axiosClient` refreshes tokens.
+if (typeof window !== 'undefined') {
+  window.addEventListener('noorpay:tokens', (e) => {
+    const d = e && e.detail ? e.detail : {};
+    const a = d.access || null;
+    const r = d.refresh || null;
+    if (a || r) setTokens(a, r);
+  });
+}
+
 export const formatNaira = (amount) =>
   `₦${Number(amount).toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 

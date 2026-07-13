@@ -27,8 +27,18 @@ client.interceptors.response.use((res) => res, async (error) => {
       try {
         const r = await axios.post(`${BASE}/token/refresh/`, { refresh }, { headers: { 'Content-Type': 'application/json' } });
         if (r.data && r.data.access) {
-          localStorage.setItem('np_access', r.data.access);
-          original.headers.Authorization = `Bearer ${r.data.access}`;
+          const newAccess = r.data.access;
+          // persist new tokens
+          localStorage.setItem('np_access', newAccess);
+          if (r.data.refresh) localStorage.setItem('np_refresh', r.data.refresh);
+          // update original request header and retry
+          original.headers.Authorization = `Bearer ${newAccess}`;
+          // notify app (in-memory token stores) that tokens changed
+          try {
+            window.dispatchEvent(new CustomEvent('noorpay:tokens', { detail: { access: newAccess, refresh: r.data.refresh || refresh } }));
+          } catch (e) {
+            // ignore if window unavailable (SSR/tests)
+          }
           return client(original);
         }
       } catch (e) {
