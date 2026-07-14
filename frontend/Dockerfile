@@ -1,5 +1,7 @@
 FROM node:20 AS build
 WORKDIR /app
+ARG VITE_API_URL
+ENV VITE_API_URL=${VITE_API_URL}
 
 # Install dependencies and build
 COPY frontend/package.json frontend/package-lock.json* ./frontend/

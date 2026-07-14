@@ -19,7 +19,11 @@ def ai_chat(request):
         return Response({'reply': 'AI Advisor requires an ANTHROPIC_API_KEY in your .env file.'})
 
     try:
-        prompt = getattr(settings, 'SHARIAH_AI_PROMPT', 'You are a helpful Islamic finance advisor. Keep responses concise and compliant with Shariah principles.')
+        prompt = request.data.get('system') or getattr(
+            settings,
+            'SHARIAH_AI_PROMPT',
+            'You are a helpful Islamic finance advisor. Keep responses concise and compliant with Shariah principles.',
+        )
         res = httpx.post(
             'https://api.anthropic.com/v1/messages',
             headers={

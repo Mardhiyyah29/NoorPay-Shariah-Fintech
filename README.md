@@ -25,7 +25,12 @@ Notes
 - For production set `VITE_API_URL` in the frontend environment to point to the deployed backend (include `/api` suffix).
 - There's a helper script for Windows to start both servers: `scripts/start-dev.ps1`.
 - CI workflow exists at `.github/workflows/ci.yml` and runs backend tests and an e2e smoke script.
+### Postman integration
 
+- Open `Postman/NoorPay.postman_collection.json` in Postman.
+- Set environment variable `base_url` to `http://localhost:8000/api`.
+- Use `Auth - Login` to obtain `access_token`, then set it for protected calls.
+- Example endpoints: `/auth/profile/`, `/reports/ai/chat/`, `/wallet/`, `/transactions/`.
 ## Production deployment guidance
 
 ### Required production environment variables

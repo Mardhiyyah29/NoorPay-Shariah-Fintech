@@ -1,7 +1,7 @@
 from decimal import Decimal
 from unittest.mock import patch, MagicMock
 
-from django.test import TestCase, override_settings
+from django.test import TestCase, override_settings, Client
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APIClient
@@ -137,3 +137,12 @@ class AIChatWithKeyTests(TestCase):
             reverse("ai-chat"), {"messages": [{"role": "user", "content": "Hi"}]}, format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class SmokeRootRedirectTest(TestCase):
+    def test_root_redirects_to_api(self):
+        client = Client()
+        resp = client.get('/', follow=False)
+        self.assertIn(resp.status_code, (301, 302))
+        location = resp.get('Location', '')
+        self.assertIn('/api', location)
