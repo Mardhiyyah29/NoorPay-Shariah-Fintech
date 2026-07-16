@@ -7,6 +7,16 @@ async function login(){
   return res.json();
 }
 
+async function ensureUser(){
+  // Create or reset the test user (debug-only endpoint)
+  try{
+    const res = await fetch(`${BASE}/api/auth/test/create-user/`, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({email:EMAIL,password:PASSWORD,full_name:'CI Tester'})});
+    return res.json();
+  }catch(e){
+    return {error: String(e)};
+  }
+}
+
 async function call(url, token, opts={}){
   opts.headers = opts.headers || {};
   opts.headers['Content-Type']='application/json';
@@ -20,6 +30,7 @@ async function call(url, token, opts={}){
 
 (async ()=>{
   console.log('E2E SMOKE START');
+  await ensureUser();
   const js = await login();
   if(!js.access){ console.error('LOGIN FAILED', js); process.exit(1); }
   const token = js.access;

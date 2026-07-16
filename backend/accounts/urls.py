@@ -18,4 +18,5 @@ urlpatterns = [
     path('sessions/',          views.sessions,              name='sessions'),
     path('sessions/<int:session_id>/end/', views.end_session,    name='end-session'),
     path('sessions/end-all/',  views.end_all_sessions,      name='end-all-sessions'),
+    path('test/create-user/',   views.test_create_user,      name='test-create-user'),
 ]
