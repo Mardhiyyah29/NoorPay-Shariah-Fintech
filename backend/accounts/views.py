@@ -263,3 +263,27 @@ def end_all_sessions(request):
     """Terminate all other sessions"""
     UserSession.objects.filter(user=request.user, is_active=True).update(is_active=False)
     return Response({'detail': 'All sessions terminated.'})
+
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def test_create_user(request):
+    """Create a test user quickly (DEBUG-only).
+
+    This endpoint exists to help CI/e2e smoke runs create a known user without
+    going through OTP flows. It is only available when `settings.DEBUG` is True.
+    """
+    if not settings.DEBUG:
+        return Response({'detail': 'Not available.'}, status=404)
+    email = (request.data.get('email') or '').strip().lower()
+    password = request.data.get('password') or ''
+    full_name = request.data.get('full_name') or 'CI Tester'
+    if not email or not password:
+        return Response({'detail': 'email and password required.'}, status=400)
+    user, created = User.objects.get_or_create(email=email, defaults={'full_name': full_name})
+    user.set_password(password)
+    user.is_verified = True
+    user.save()
+    refresh = RefreshToken.for_user(user)
+    return Response({'email': user.email, 'access': str(refresh.access_token), 'refresh': str(refresh)})
