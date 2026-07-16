@@ -32,7 +32,12 @@ class RegistrationFlowTests(TestCase):
         step1 = self.client.post(reverse("register-step1"), {
             "full_name": "Bilal Ahmad", "email": "bilal@noorpay.ng", "phone": "08011112222",
         })
-        otp_code = step1.data["otp_debug"]
+        # Tests should not rely on DEBUG-only fields. Prefer the model fallback when
+        # the API does not return `otp_debug` (CI runs with DEBUG=False).
+        if "otp_debug" in getattr(step1, 'data', {}):
+            otp_code = step1.data["otp_debug"]
+        else:
+            otp_code = OTPCode.objects.filter(user__email="bilal@noorpay.ng").order_by('-created_at').first().code
 
         # Step 2
         step2 = self.client.post(reverse("verify-otp"), {"email": "bilal@noorpay.ng", "code": otp_code})
