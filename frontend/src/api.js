@@ -173,6 +173,6 @@ export const notifications = {
 // ── REPORTS & AI ─────────────────────────────────────────────────
 export const reports = {
   getMonthly: (m,y)     => request(`/reports/monthly/?month=${m}&year=${y}`),
-  chatWithAI: (messages) => request('/reports/ai/chat/', { method: 'POST', body: JSON.stringify({ messages }) }),
+  chatWithAI: (payload) => request('/reports/ai/chat/', { method: 'POST', body: JSON.stringify(payload) }),
   getAIPrompts:()        => request('/reports/ai/prompts/'),
 };

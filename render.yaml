@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: noorpay-backend
+    env: docker
+    repo: https://github.com/Abdurkabir29/NoorPay--Project
+    buildCommand: "cd backend && pip install -r requirements.txt && python manage.py migrate"
+    dockerfilePath: backend/Dockerfile
+    port: 8000
+
+  - type: web
+    name: noorpay-frontend
+    env: docker
+    repo: https://github.com/Abdurkabir29/NoorPay--Project
+    dockerfilePath: frontend/Dockerfile
+    port: 80

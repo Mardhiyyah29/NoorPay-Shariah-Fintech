@@ -2262,23 +2262,9 @@ const AIAdvisor = ({ nav }) => {
     setMsgs(m => [...m, { role: "user", text: msg }]);
     setLoading(true);
     try {
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": import.meta.env?.VITE_ANTHROPIC_API_KEY || "",
-          "anthropic-version": "2023-06-01",
-          "anthropic-dangerous-direct-browser-access": "true",
-        },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-6",
-          max_tokens: 450,
-          system: SYSTEM,
-          messages: [...msgs.map(m => ({ role: m.role, content: m.text })), { role: "user", content: msg }],
-        }),
-      });
-      const data = await res.json();
-      setMsgs(m => [...m, { role: "assistant", text: data.content?.[0]?.text || "I couldn\'t process that. Please try again." }]);
+      const payload = [...msgs.map(m => ({ role: m.role, content: m.text })), { role: "user", content: msg }];
+      const data = await reports.chatWithAI({ messages: payload, system: SYSTEM });
+      setMsgs(m => [...m, { role: "assistant", text: data.reply || "I couldn\'t process that. Please try again." }]);
     } catch {
       setMsgs(m => [...m, { role: "assistant", text: "Connection error. Please check your internet and try again, in sha Allah." }]);
     }

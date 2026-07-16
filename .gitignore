@@ -1,0 +1,38 @@
+﻿# Python
+*.py[cod]
+__pycache__/
+**/__pycache__/
+*.pyc
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+*.manifest
+*.spec
+*.pyo
+*.pyd
+
+# Django
+*.sqlite3
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+db.sqlite3.bak
+
+# Virtual environments
+venv/
+env/
+.venv/
+backend/venv/
+backend/env/
+
+# OS and editor
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.vscode/
+.idea/

@@ -6,6 +6,7 @@ const client = axios.create({
   baseURL: BASE,
   headers: { 'Content-Type': 'application/json' },
   withCredentials: false,
+  timeout: 30000,
 });
 
 // Attach access token from localStorage on every request
